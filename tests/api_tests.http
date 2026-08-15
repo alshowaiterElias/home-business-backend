@@ -1,0 +1,222 @@
+### Variables
+@baseUrl = http://localhost:5000/api
+@authToken = {{verifyOtp.response.body.token}}
+
+### ========================================
+### 1. HEALTH CHECK
+### ========================================
+GET {{baseUrl}}/health
+
+### ========================================
+### 2. AUTHENTICATION (Login / Register)
+### ========================================
+
+### Step 2.1: Request OTP
+# This will log a 4-digit code in the terminal
+# @name requestOtp
+POST {{baseUrl}}/auth/request-otp
+Content-Type: application/json
+
+{
+  "phoneNumber": "+967770000001"
+}
+
+
+### Step 2.2: Verify OTP
+# Replace '1234' with the code you saw in the terminal output
+# @name verifyOtp
+POST {{baseUrl}}/auth/verify-otp
+Content-Type: application/json
+
+{
+  "phoneNumber": "+967770000001",
+  "otpCode": "1234" 
+}
+
+### ========================================
+### 3. TAXONOMY (Categories & Locations)
+### ========================================
+
+### Get all locations (Governorates and Cities)
+GET {{baseUrl}}/taxonomy/locations
+
+### Get all categories
+GET {{baseUrl}}/taxonomy/categories
+
+
+### ========================================
+### 4. PRODUCTS
+### ========================================
+
+### Get all approved products
+GET {{baseUrl}}/products
+
+### Get single product (Replace with actual ID from the list above)
+GET {{baseUrl}}/products/REPLACE_WITH_ACTUAL_ID
+
+
+### ========================================
+### 5. BUSINESS PROFILES
+### ========================================
+
+### Create / Update Business Profile
+# (Note: You must grab a cityId from the Taxonomy/Locations response)
+POST {{baseUrl}}/business
+Authorization: Bearer {{authToken}}
+Content-Type: multipart/form-data; boundary=Boundary123
+
+--Boundary123
+Content-Disposition: form-data; name="businessName"
+
+حلويات السعادة
+--Boundary123
+Content-Disposition: form-data; name="description"
+
+أفضل الحلويات المنزلية في صنعاء
+--Boundary123
+Content-Disposition: form-data; name="contactPhone"
+
++967770000001
+--Boundary123
+Content-Disposition: form-data; name="cityId"
+
+REPLACE_WITH_ACTUAL_CITY_ID
+--Boundary123
+Content-Disposition: form-data; name="logo"; filename="dummy.jpg"
+Content-Type: image/jpeg
+
+< ./dummy.jpg
+--Boundary123--
+
+
+### ========================================
+### 6. UPLOAD PRODUCT
+### ========================================
+
+### Create a new Product (Will be PENDING)
+# (Note: You must grab a categoryId from the Taxonomy/Categories response)
+POST {{baseUrl}}/products
+Authorization: Bearer {{authToken}}
+Content-Type: multipart/form-data; boundary=Boundary456
+
+--Boundary456
+Content-Disposition: form-data; name="title"
+
+كيكة الفراولة
+--Boundary456
+Content-Disposition: form-data; name="description"
+
+كيكة لذيذة بالفراولة الطازجة
+--Boundary456
+Content-Disposition: form-data; name="price"
+
+4000
+--Boundary456
+Content-Disposition: form-data; name="unitOfSale"
+
+حبة
+--Boundary456
+Content-Disposition: form-data; name="categoryId"
+
+REPLACE_WITH_ACTUAL_CATEGORY_ID
+--Boundary456
+Content-Disposition: form-data; name="productImages"; filename="dummy.jpg"
+Content-Type: image/jpeg
+
+< ./dummy.jpg
+--Boundary456--
+
+
+### ========================================
+### 7. USER INTERACTIONS (Favorites & Reviews)
+### ========================================
+
+### Toggle Favorite Product
+POST {{baseUrl}}/interactions/favorite
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "productId": "REPLACE_WITH_PRODUCT_ID"
+}
+
+### Get My Favorites
+GET {{baseUrl}}/interactions/favorites
+Authorization: Bearer {{authToken}}
+
+### Add Review
+POST {{baseUrl}}/interactions/review
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "productId": "REPLACE_WITH_PRODUCT_ID",
+  "rating": 5,
+  "comment": "طعم رائع جداً وتوصيل سريع!"
+}
+
+### ========================================
+### 8. USER & REPORTS
+### ========================================
+
+### Submit a Report
+POST {{baseUrl}}/interactions/report
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "targetType": "PRODUCT",
+  "targetId": "REPLACE_WITH_PRODUCT_ID",
+  "reason": "صورة المنتج غير لائقة أو السعر مبالغ فيه"
+}
+
+### Register Device Token (For Push Notifications)
+POST {{baseUrl}}/users/device-token
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "fcmToken": "mock_fcm_token_1234567890",
+  "devicePlatform": "ANDROID"
+}
+
+### ========================================
+### 9. ADMIN PANEL
+### ========================================
+
+### 9.1: Request Admin OTP
+POST {{baseUrl}}/auth/request-otp
+Content-Type: application/json
+
+{
+  "phoneNumber": "+967770000999" 
+}
+
+### 9.2: Verify Admin OTP
+# @name verifyAdminOtp
+POST {{baseUrl}}/auth/verify-otp
+Content-Type: application/json
+
+{
+  "phoneNumber": "+967770000999",
+  "otpCode": "1234" 
+}
+
+### Variables for Admin Auth
+@adminToken = {{verifyAdminOtp.response.body.token}}
+
+### Get all Pending Products
+GET {{baseUrl}}/admin/products/pending
+Authorization: Bearer {{adminToken}}
+
+### Approve a Product
+PUT {{baseUrl}}/admin/products/REPLACE_WITH_PRODUCT_ID/approve
+Authorization: Bearer {{adminToken}}
+
+### Get all Pending Reports
+GET {{baseUrl}}/admin/reports
+Authorization: Bearer {{adminToken}}
+
+### View Admin Audit Logs
+GET {{baseUrl}}/admin/audit-logs
+Authorization: Bearer {{adminToken}}

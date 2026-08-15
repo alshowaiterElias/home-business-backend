@@ -1,0 +1,253 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String            @id @default(uuid())
+  phoneNumber      String            @unique @map("phone_number")
+  isVerified       Boolean           @default(false) @map("is_verified")
+  otpCode          String?           @map("otp_code")
+  otpExpiresAt     DateTime?         @map("otp_expires_at")
+  role             Role              @default(USER)
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+
+  business         Business?
+  reviews          ProductReview[]
+  favoriteProducts FavoriteProduct[]
+  reports          Report[]
+  deviceTokens     DeviceToken[]
+  adminAuditLogs   AdminAuditLog[]
+  notifications    Notification[]
+
+  @@map("users")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model Business {
+  id             String    @id @default(uuid())
+  userId         String    @unique @map("user_id")
+  businessName   String    @map("business_name")
+  description    String?   @db.Text
+  contactPhone   String    @map("contact_phone")
+  cityId         String    @map("city_id")
+  addressDetails String    @db.Text @map("address_details")
+  logoUrl        String?   @map("logo_url")
+  isActive       Boolean   @default(true) @map("is_active")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  city           City      @relation(fields: [cityId], references: [id])
+  products       Product[]
+
+  @@index([cityId])
+  @@map("businesses")
+}
+
+model Governorate {
+  id        String   @id @default(uuid())
+  nameAr    String   @map("name_ar")
+  cities    City[]
+
+  @@map("governorates")
+}
+
+model City {
+  id             String      @id @default(uuid())
+  governorateId  String      @map("governorate_id")
+  nameAr         String      @map("name_ar")
+  
+  governorate    Governorate @relation(fields: [governorateId], references: [id], onDelete: Cascade)
+  businesses     Business[]
+
+  @@map("cities")
+}
+
+model Category {
+  id         String     @id @default(uuid())
+  parentId   String?    @map("parent_id")
+  nameAr     String     @map("name_ar")
+  iconUrl    String?    @map("icon_url")
+  sortOrder  Int        @default(0) @map("sort_order")
+  isActive   Boolean    @default(true) @map("is_active")
+
+  parent     Category?  @relation("SubCategories", fields: [parentId], references: [id])
+  children   Category[] @relation("SubCategories")
+  products   Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id              String         @id @default(uuid())
+  businessId      String         @map("business_id")
+  categoryId      String         @map("category_id")
+  title           String
+  description     String         @db.Text
+  price           Decimal        @db.Decimal(10, 2)
+  currency        String         @default("YER")
+  unitOfSale      String         @map("unit_of_sale")
+  status          ProductStatus  @default(PENDING)
+  rejectionReason String?        @db.Text @map("rejection_reason")
+  isAvailable     Boolean        @default(true) @map("is_available")
+  averageRating   Decimal        @default(0.0) @db.Decimal(3, 2) @map("average_rating")
+  reviewsCount    Int            @default(0) @map("reviews_count")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  business        Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category        Category       @relation(fields: [categoryId], references: [id])
+  images          ProductImage[]
+  reviews         ProductReview[]
+  favoritedBy     FavoriteProduct[]
+
+  @@index([businessId])
+  @@index([status, categoryId])
+  @@map("products")
+}
+
+enum ProductStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model ProductImage {
+  id         String   @id @default(uuid())
+  productId  String   @map("product_id")
+  imageUrl   String   @map("image_url")
+  isCover    Boolean  @default(false) @map("is_cover")
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("product_images")
+}
+
+model ProductReview {
+  id         String   @id @default(uuid())
+  productId  String   @map("product_id")
+  userId     String   @map("user_id")
+  rating     Int      @db.TinyInt
+  comment    String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, userId])
+  @@map("product_reviews")
+}
+
+model FavoriteProduct {
+  userId     String   @map("user_id")
+  productId  String   @map("product_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([userId, productId])
+  @@map("favorite_products")
+}
+
+model Report {
+  id          String       @id @default(uuid())
+  reporterId  String       @map("reporter_id")
+  targetType  ReportTarget @map("target_type")
+  targetId    String       @map("target_id")
+  reason      String       @db.Text
+  status      ReportStatus @default(PENDING)
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  reporter    User         @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@map("reports")
+}
+
+enum ReportTarget {
+  PRODUCT
+  REVIEW
+  BUSINESS
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+}
+
+model DeviceToken {
+  id             String         @id @default(uuid())
+  userId         String         @map("user_id")
+  fcmToken       String         @map("fcm_token")
+  devicePlatform DevicePlatform @map("device_platform")
+  lastUsedAt     DateTime       @default(now()) @map("last_used_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("device_tokens")
+}
+
+enum DevicePlatform {
+  ANDROID
+  IOS
+}
+
+model AdminAuditLog {
+  id        String   @id @default(uuid())
+  adminId   String   @map("admin_id")
+  action    String
+  targetId  String   @map("target_id")
+  details   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  admin     User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@map("admin_audit_logs")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  title     String
+  body      String           @db.Text
+  type      NotificationType
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at")
+  
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  PRODUCT_APPROVED
+  PRODUCT_REJECTED
+  NEW_REVIEW
+  SYSTEM_ALERT
+}
+
+model WhatsAppTemplate {
+  id        String   @id @default(uuid())
+  type      String   @unique // e.g., 'PRODUCT_INQUIRY', 'STORE_INQUIRY'
+  content   String   @db.Text
+  isActive  Boolean  @default(true) @map("is_active")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("whatsapp_templates")
+}

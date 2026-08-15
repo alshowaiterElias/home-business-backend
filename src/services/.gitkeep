@@ -1,0 +1,4 @@
+// This folder will contain reusable business logic and database interactions.
+// Controllers will call these services to keep the route logic clean.
+
+// Example: authService.js, productService.js

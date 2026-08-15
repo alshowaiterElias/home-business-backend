@@ -1,0 +1,4 @@
+// This folder will contain all the controller logic 
+// responsible for handling incoming HTTP requests and sending responses.
+
+// Example: userController.js, productController.js
