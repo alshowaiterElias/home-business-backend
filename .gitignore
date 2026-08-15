@@ -26,3 +26,4 @@ firebase-adminsdk.json
 
 # Prisma
 prisma/migrations/**/migration_lock.toml
+
