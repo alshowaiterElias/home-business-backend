@@ -49,9 +49,10 @@ const initWhatsAppBot = async () => {
         const jid = msg.key.remoteJid; // e.g. 967713729839@s.whatsapp.net
         if (!jid.endsWith('@s.whatsapp.net')) return;
 
-        // Extract sender phone number in +967 format
-        const rawPhone = jid.split('@')[0];
-        const senderPhone = '+' + rawPhone;
+        // Extract sender phone number
+        const rawJidNumber = jid.split('@')[0]; // e.g. "967772546343"
+        const formattedPhonePlus = '+' + rawJidNumber;
+        const formattedPhoneNoPlus = rawJidNumber;
 
         // Extract text message content
         const text = (
@@ -62,7 +63,7 @@ const initWhatsAppBot = async () => {
 
         if (!text) return;
 
-        console.log(`[WhatsApp Bot] Incoming message from ${senderPhone}: "${text}"`);
+        console.log(`[WhatsApp Bot] 📩 Incoming message from ${formattedPhonePlus}: "${text}"`);
 
         // Extract 4-digit numeric code from message
         const match = text.match(/\b\d{4}\b/);
@@ -72,24 +73,31 @@ const initWhatsAppBot = async () => {
 
         // ═════════════════════════════════════════════════════════════════
         // POINT 5: STRICT CONSISTENCY CHECK
-        // Sender phone MUST match user's registered phone number in DB
+        // Flexible query matching either +967... or 967... or 07...
         // ═════════════════════════════════════════════════════════════════
-        const user = await prisma.user.findUnique({
-          where: { phoneNumber: senderPhone }
+        let user = await prisma.user.findFirst({
+          where: {
+            OR: [
+              { phoneNumber: formattedPhonePlus },
+              { phoneNumber: formattedPhoneNoPlus },
+              { phoneNumber: formattedPhonePlus.replace('+967', '0') },
+              { phoneNumber: formattedPhonePlus.replace('+967', '') },
+            ]
+          }
         });
 
         if (!user) {
-          console.log(`[WhatsApp Bot] ⚠️ Ignored code from ${senderPhone}: User not found in DB`);
+          console.log(`[WhatsApp Bot] ⚠️ Ignored code ${extractedCode} from ${formattedPhonePlus}: User not found in DB`);
           return;
         }
 
         if (!user.otpCode || user.otpCode !== extractedCode) {
-          console.log(`[WhatsApp Bot] ⚠️ Code mismatch for ${senderPhone}: Received ${extractedCode}, DB expected ${user.otpCode}`);
+          console.log(`[WhatsApp Bot] ⚠️ Code mismatch for ${user.phoneNumber}: Received "${extractedCode}", DB expected "${user.otpCode}"`);
           return;
         }
 
         if (user.otpExpiresAt && user.otpExpiresAt < new Date()) {
-          console.log(`[WhatsApp Bot] ⚠️ Expired code for ${senderPhone}`);
+          console.log(`[WhatsApp Bot] ⚠️ Expired code for ${user.phoneNumber}`);
           return;
         }
 
@@ -103,12 +111,16 @@ const initWhatsAppBot = async () => {
           }
         });
 
-        console.log(`[WhatsApp Bot] 🎉 User ${senderPhone} verified successfully via WhatsApp!`);
+        console.log(`[WhatsApp Bot] 🎉 User ${user.phoneNumber} verified successfully via WhatsApp!`);
 
         // Send confirmation reply back to user on WhatsApp
-        await sock.sendMessage(jid, {
-          text: '✅ تم تأكيد حسابك بنجاح في تطبيق السوق المنزلي! يمكنك العودة للتطبيق الآن.'
-        });
+        try {
+          await sock.sendMessage(jid, {
+            text: '✅ تم تأكيد حسابك بنجاح في تطبيق السوق المنزلي! يمكنك العودة للتطبيق الآن.'
+          });
+        } catch (sendErr) {
+          console.error('[WhatsApp Bot] Could not send confirmation reply:', sendErr.message);
+        }
 
       } catch (err) {
         console.error('[WhatsApp Bot] Error processing message:', err);
