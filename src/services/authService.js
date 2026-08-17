@@ -74,7 +74,7 @@ const loginOrRegister = async (rawPhone) => {
   console.log(`=============================================\n`);
 
   // Target business WhatsApp number configured in env (or default)
-  const businessPhone = process.env.WHATSAPP_BUSINESS_PHONE || '967770000000';
+  const businessPhone = process.env.WHATSAPP_BUSINESS_PHONE || '967772546343';
   const message = `كود التحقق في السوق المنزلي: ${otpCode}`;
 
   return {
