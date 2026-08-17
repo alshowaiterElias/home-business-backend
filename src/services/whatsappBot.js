@@ -8,6 +8,24 @@ let sock = null;
 let currentQRDataURL = null;
 let isConnected = false;
 
+// Memory store for real-time verification errors (e.g. phone number mismatch)
+const verificationErrorsMap = new Map();
+
+const setVerificationError = (phone, errorMsg) => {
+  const clean = phone.replace(/\D/g, '');
+  verificationErrorsMap.set(clean, errorMsg);
+};
+
+const getVerificationError = (phone) => {
+  const clean = phone.replace(/\D/g, '');
+  return verificationErrorsMap.get(clean) || null;
+};
+
+const clearVerificationError = (phone) => {
+  const clean = phone.replace(/\D/g, '');
+  verificationErrorsMap.delete(clean);
+};
+
 /**
  * Returns current QR code as DataURL (base64 PNG) or null if connected.
  */
@@ -99,38 +117,48 @@ const initWhatsAppBot = async () => {
         const extractedCode = match[0];
 
         // ═════════════════════════════════════════════════════════════════
-        // POINT 5: STRICT CONSISTENCY CHECK
-        // Flexible query matching either +967... or 967... or 07...
+        // STRICT SENDER MATCHING & PHONE MISMATCH DETECTION
         // ═════════════════════════════════════════════════════════════════
-        let user = await prisma.user.findFirst({
-          where: {
-            OR: [
-              { phoneNumber: formattedPhonePlus },
-              { phoneNumber: formattedPhoneNoPlus },
-              { phoneNumber: formattedPhonePlus.replace('+967', '0') },
-              { phoneNumber: formattedPhonePlus.replace('+967', '') },
-            ]
-          }
+        // First: Find the target user in DB who requested this code
+        const targetUser = await prisma.user.findFirst({
+          where: { otpCode: extractedCode }
         });
 
-        if (!user) {
-          console.log(`[WhatsApp Bot] ⚠️ Ignored code ${extractedCode} from ${formattedPhonePlus}: User not found in DB`);
+        if (!targetUser) {
+          console.log(`[WhatsApp Bot] ⚠️ Ignored code ${extractedCode} from ${formattedPhonePlus}: Code not found or expired.`);
           return;
         }
 
-        if (!user.otpCode || user.otpCode !== extractedCode) {
-          console.log(`[WhatsApp Bot] ⚠️ Code mismatch for ${user.phoneNumber}: Received "${extractedCode}", DB expected "${user.otpCode}"`);
+        // Check if sender phone matches target user's registered phone
+        const cleanSender = formattedPhonePlus.replace(/\D/g, '');
+        const cleanTarget = targetUser.phoneNumber.replace(/\D/g, '');
+        const isMatch = (cleanSender === cleanTarget || cleanSender.endsWith(cleanTarget) || cleanTarget.endsWith(cleanSender));
+
+        if (!isMatch) {
+          console.log(`[WhatsApp Bot] 🚫 PHONE MISMATCH DETECTED! Sender: ${formattedPhonePlus}, Registered: ${targetUser.phoneNumber}`);
+          
+          const errorMsg = `رقم الواتساب الذي أرسلت منه (${formattedPhonePlus}) لا يطابق الرقم الذي أدخلته في التطبيق (${targetUser.phoneNumber}).`;
+          setVerificationError(targetUser.phoneNumber, errorMsg);
+
+          try {
+            await sock.sendMessage(jid, {
+              text: `⚠️ تنبيه من السوق المنزلي:\n\nرقم الواتساب الحالي (${formattedPhonePlus}) لا يطابق الرقم الذي أدخلته في التطبيق (${targetUser.phoneNumber}).\nيرجى التوثيق من الواتساب الخاص بالرقم المسجل.`
+            });
+          } catch (e) {
+            console.error('[WhatsApp Bot] Error sending mismatch reply:', e);
+          }
           return;
         }
 
-        if (user.otpExpiresAt && user.otpExpiresAt < new Date()) {
-          console.log(`[WhatsApp Bot] ⚠️ Expired code for ${user.phoneNumber}`);
+        if (targetUser.otpExpiresAt && targetUser.otpExpiresAt < new Date()) {
+          console.log(`[WhatsApp Bot] ⚠️ Expired code for ${targetUser.phoneNumber}`);
+          setVerificationError(targetUser.phoneNumber, 'انتهت صلاحية رمز التحقق. يرجى طلب رمز جديد.');
           return;
         }
 
         // Successfully verified! Update DB
         await prisma.user.update({
-          where: { id: user.id },
+          where: { id: targetUser.id },
           data: {
             isVerified: true,
             otpCode: null,
@@ -138,7 +166,8 @@ const initWhatsAppBot = async () => {
           }
         });
 
-        console.log(`[WhatsApp Bot] 🎉 User ${user.phoneNumber} verified successfully via WhatsApp!`);
+        clearVerificationError(targetUser.phoneNumber);
+        console.log(`[WhatsApp Bot] 🎉 User ${targetUser.phoneNumber} verified successfully via WhatsApp!`);
 
         // Send confirmation reply back to user on WhatsApp
         try {
@@ -159,4 +188,11 @@ const initWhatsAppBot = async () => {
   }
 };
 
-module.exports = { initWhatsAppBot, getQRDataURL, getBotStatus };
+module.exports = { 
+  initWhatsAppBot, 
+  getQRDataURL, 
+  getBotStatus, 
+  getVerificationError, 
+  setVerificationError, 
+  clearVerificationError 
+};

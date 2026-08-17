@@ -130,11 +130,20 @@ const verifyOTP = async (rawPhone, otpCode) => {
   return { token, user: updatedUser };
 };
 
+const { getVerificationError, clearVerificationError } = require('./whatsappBot');
+
 /**
  * Checks if user has been verified automatically (for polling after WhatsApp message sent)
  */
 const checkVerificationStatus = async (rawPhone) => {
   const phoneNumber = normalizePhoneNumber(rawPhone);
+
+  // Check if WhatsApp bot detected a phone mismatch or verification error
+  const error = getVerificationError(phoneNumber);
+  if (error) {
+    clearVerificationError(phoneNumber);
+    return { isVerified: false, error };
+  }
 
   const user = await prisma.user.findUnique({
     where: { phoneNumber },
