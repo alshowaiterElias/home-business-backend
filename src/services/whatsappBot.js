@@ -2,7 +2,25 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = requi
 const qrcode = require('qrcode-terminal');
 const prisma = require('../config/db');
 
+const QRCode = require('qrcode');
+
 let sock = null;
+let currentQRDataURL = null;
+let isConnected = false;
+
+/**
+ * Returns current QR code as DataURL (base64 PNG) or null if connected.
+ */
+const getQRDataURL = async () => {
+  return currentQRDataURL;
+};
+
+/**
+ * Returns whether WhatsApp bot is connected.
+ */
+const getBotStatus = () => {
+  return { isConnected, hasQR: !!currentQRDataURL };
+};
 
 /**
  * Initializes the lightweight WhatsApp listener (Baileys socket).
@@ -14,28 +32,37 @@ const initWhatsAppBot = async () => {
 
     sock = makeWASocket({
       auth: state,
-      printQRInTerminal: false, // We log custom QR
+      printQRInTerminal: false, // We render custom QR
       browser: ['Yemen Marketplace', 'Chrome', '1.0.0']
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('connection.update', (update) => {
+    sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
       if (qr) {
+        try {
+          currentQRDataURL = await QRCode.toDataURL(qr, { margin: 2, scale: 8 });
+        } catch (e) {
+          console.error('[WhatsApp Bot] Error generating QR DataURL:', e);
+        }
+
         console.log('\n======================================================');
-        console.log('[WhatsApp Bot] Scan this QR code with your Business WhatsApp:');
-        qrcode.generate(qr, { small: true });
+        console.log('[WhatsApp Bot] 🌐 QR Code ready!');
+        console.log('[WhatsApp Bot] Open this URL in browser to scan: https://home-business-backend.onrender.com/qr');
         console.log('======================================================\n');
       }
 
       if (connection === 'close') {
+        isConnected = false;
         const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
         console.log('[WhatsApp Bot] Connection closed due to', lastDisconnect?.error, ', reconnecting:', shouldReconnect);
         if (shouldReconnect) {
           setTimeout(initWhatsAppBot, 5000);
         }
       } else if (connection === 'open') {
+        isConnected = true;
+        currentQRDataURL = null;
         console.log('[WhatsApp Bot] ✅ Connected successfully to WhatsApp!');
       }
     });
@@ -132,4 +159,4 @@ const initWhatsAppBot = async () => {
   }
 };
 
-module.exports = { initWhatsAppBot };
+module.exports = { initWhatsAppBot, getQRDataURL, getBotStatus };
