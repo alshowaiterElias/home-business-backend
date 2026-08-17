@@ -78,8 +78,7 @@ const loginOrRegister = async (rawPhone) => {
   const message = `كود التحقق في السوق المنزلي: ${otpCode}`;
 
   return {
-    message: 'تم إنشاء رمز التحقق بنجاح',
-    otpCode, // Returned for dev/testing or manual SMS input
+    message: 'تم إنشاء طلب التحقق بنجاح',
     phoneNumber,
     businessPhone,
     whatsappText: message,
