@@ -89,69 +89,85 @@ const initWhatsAppBot = async () => {
     sock.ev.on('messages.upsert', async (m) => {
       try {
         const msg = m.messages[0];
-        if (!msg.message || msg.key.fromMe) return;
+        if (!msg || !msg.message || msg.key.fromMe) return;
 
-        const jid = msg.key.remoteJid; // e.g. 967713729839@s.whatsapp.net
-        if (!jid.endsWith('@s.whatsapp.net')) return;
-
-        // Extract sender phone number
-        const rawJidNumber = jid.split('@')[0]; // e.g. "967772546343"
-        const formattedPhonePlus = '+' + rawJidNumber;
-        const formattedPhoneNoPlus = rawJidNumber;
+        console.log('[WhatsApp Bot DEBUG] ---------------------------------------------');
+        console.log('[WhatsApp Bot DEBUG] 📩 Incoming Message Event Detected!');
+        console.log('[WhatsApp Bot DEBUG] Key:', JSON.stringify(msg.key));
+        console.log('[WhatsApp Bot DEBUG] PushName:', msg.pushName);
 
         // Extract text message content
         const text = (
           msg.message.conversation ||
           msg.message.extendedTextMessage?.text ||
+          msg.message.imageMessage?.caption ||
           ''
         ).trim();
 
+        console.log(`[WhatsApp Bot DEBUG] Text Content: "${text}"`);
         if (!text) return;
 
-        console.log(`[WhatsApp Bot] 📩 Incoming message from ${formattedPhonePlus}: "${text}"`);
+        // Find candidate JID with phone number (@s.whatsapp.net)
+        let phoneJid = null;
+        if (msg.key.remoteJid?.endsWith('@s.whatsapp.net')) {
+          phoneJid = msg.key.remoteJid;
+        } else if (msg.key.participant?.endsWith('@s.whatsapp.net')) {
+          phoneJid = msg.key.participant;
+        } else {
+          console.log(`[WhatsApp Bot DEBUG] Note: Sender JID is ${msg.key.remoteJid} (LID or non-standard format).`);
+        }
 
         // Extract 4-digit numeric code from message
         const match = text.match(/\b\d{4}\b/);
-        if (!match) return;
+        if (!match) {
+          console.log('[WhatsApp Bot DEBUG] ⚠️ No 4-digit code found in message.');
+          return;
+        }
 
         const extractedCode = match[0];
+        console.log(`[WhatsApp Bot DEBUG] 🔍 Extracted OTP Code: ${extractedCode}`);
 
         // ═════════════════════════════════════════════════════════════════
         // STRICT SENDER MATCHING & PHONE MISMATCH DETECTION
         // ═════════════════════════════════════════════════════════════════
-        // First: Find the target user in DB who requested this code
         const targetUser = await prisma.user.findFirst({
           where: { otpCode: extractedCode }
         });
 
         if (!targetUser) {
-          console.log(`[WhatsApp Bot] ⚠️ Ignored code ${extractedCode} from ${formattedPhonePlus}: Code not found or expired.`);
+          console.log(`[WhatsApp Bot DEBUG] ⚠️ Code ${extractedCode} not found in DB or already verified.`);
           return;
         }
 
-        // Check if sender phone matches target user's registered phone
-        const cleanSender = formattedPhonePlus.replace(/\D/g, '');
-        const cleanTarget = targetUser.phoneNumber.replace(/\D/g, '');
-        const isMatch = (cleanSender === cleanTarget || cleanSender.endsWith(cleanTarget) || cleanTarget.endsWith(cleanSender));
+        const senderPhone = phoneJid ? '+' + phoneJid.split('@')[0] : `LID (${msg.key.remoteJid})`;
 
-        if (!isMatch) {
-          console.log(`[WhatsApp Bot] 🚫 PHONE MISMATCH DETECTED! Sender: ${formattedPhonePlus}, Registered: ${targetUser.phoneNumber}`);
-          
-          const errorMsg = `رقم الواتساب الذي أرسلت منه (${formattedPhonePlus}) لا يطابق الرقم الذي أدخلته في التطبيق (${targetUser.phoneNumber}).`;
-          setVerificationError(targetUser.phoneNumber, errorMsg);
+        if (phoneJid) {
+          const cleanSender = phoneJid.split('@')[0].replace(/\D/g, '');
+          const cleanTarget = targetUser.phoneNumber.replace(/\D/g, '');
+          const isMatch = (cleanSender === cleanTarget || cleanSender.endsWith(cleanTarget) || cleanTarget.endsWith(cleanSender));
 
-          try {
-            await sock.sendMessage(jid, {
-              text: `⚠️ تنبيه من السوق المنزلي:\n\nرقم الواتساب الحالي (${formattedPhonePlus}) لا يطابق الرقم الذي أدخلته في التطبيق (${targetUser.phoneNumber}).\nيرجى التوثيق من الواتساب الخاص بالرقم المسجل.`
-            });
-          } catch (e) {
-            console.error('[WhatsApp Bot] Error sending mismatch reply:', e);
+          if (!isMatch) {
+            console.log(`[WhatsApp Bot DEBUG] 🚫 PHONE MISMATCH! Sender: ${senderPhone}, Registered: ${targetUser.phoneNumber}`);
+            
+            const errorMsg = `رقم الواتساب الذي أرسلت منه (${senderPhone}) لا يطابق الرقم الذي أدخلته في التطبيق (${targetUser.phoneNumber}).`;
+            setVerificationError(targetUser.phoneNumber, errorMsg);
+
+            try {
+              const replyJid = msg.key.remoteJid;
+              await sock.sendMessage(replyJid, {
+                text: `⚠️ تنبيه من السوق المنزلي:\n\nرقم الواتساب الحالي (${senderPhone}) لا يطابق الرقم الذي أدخلته في التطبيق (${targetUser.phoneNumber}).\nيرجى التوثيق من الواتساب الخاص بالرقم المسجل.`
+              });
+            } catch (e) {
+              console.error('[WhatsApp Bot DEBUG] Error sending mismatch reply:', e);
+            }
+            return;
           }
-          return;
+        } else {
+          console.log(`[WhatsApp Bot DEBUG] Sender is using LID (${msg.key.remoteJid}), matching directly via code ${extractedCode} for registered user ${targetUser.phoneNumber}`);
         }
 
         if (targetUser.otpExpiresAt && targetUser.otpExpiresAt < new Date()) {
-          console.log(`[WhatsApp Bot] ⚠️ Expired code for ${targetUser.phoneNumber}`);
+          console.log(`[WhatsApp Bot DEBUG] ⚠️ Expired code for ${targetUser.phoneNumber}`);
           setVerificationError(targetUser.phoneNumber, 'انتهت صلاحية رمز التحقق. يرجى طلب رمز جديد.');
           return;
         }
@@ -167,15 +183,16 @@ const initWhatsAppBot = async () => {
         });
 
         clearVerificationError(targetUser.phoneNumber);
-        console.log(`[WhatsApp Bot] 🎉 User ${targetUser.phoneNumber} verified successfully via WhatsApp!`);
+        console.log(`[WhatsApp Bot DEBUG] 🎉 SUCCESS! User ${targetUser.phoneNumber} verified via WhatsApp (Sender: ${senderPhone})!`);
 
         // Send confirmation reply back to user on WhatsApp
         try {
-          await sock.sendMessage(jid, {
-            text: '✅ تم تأكيد حسابك بنجاح في تطبيق السوق المنزلي! يمكنك العودة للتطبيق الآن.'
+          const replyJid = msg.key.remoteJid;
+          await sock.sendMessage(replyJid, {
+            text: `✅ تم توثيق حسابك في السوق المنزلي بنجاح! يمكنك الآن العودة إلى التطبيق.`
           });
-        } catch (sendErr) {
-          console.error('[WhatsApp Bot] Could not send confirmation reply:', sendErr.message);
+        } catch (e) {
+          console.error('[WhatsApp Bot DEBUG] Error sending confirmation message:', e);
         }
 
       } catch (err) {
