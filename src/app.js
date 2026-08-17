@@ -9,6 +9,9 @@ const routes = require('./routes');
 
 const app = express();
 
+// Trust reverse proxy (Render / Nginx / Cloudflare) for accurate rate limiting
+app.set('trust proxy', 1);
+
 // Security headers
 app.use(helmet());
 
