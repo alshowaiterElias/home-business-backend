@@ -4,15 +4,12 @@ const authController = require('../controllers/authController');
 const { otpRequestLimiter, otpVerifyLimiter } = require('../middlewares/rateLimiter');
 const { validate, authSchemas } = require('../middlewares/validationMiddleware');
 
-/* =========================================================
-   OLD OTP FLOW ROUTES (Disabled)
-   =========================================================
-// router.post('/request-otp', otpRequestLimiter, validate(authSchemas.requestOTP), authController.requestOTP);
-// router.post('/verify-otp', otpVerifyLimiter, validate(authSchemas.verifyOTP), authController.verifyOTP);
-========================================================= */
+// Native OTP Routes
+router.post('/request-otp', otpRequestLimiter, authController.requestOTP);
+router.post('/verify-otp', otpVerifyLimiter, authController.verifyOTP);
+router.post('/check-status', authController.checkStatus);
 
-// NEW FIREBASE AUTH FLOW
-// POST /api/v1/auth/verify-firebase-token
+// Firebase Token Route (legacy option)
 router.post('/verify-firebase-token', otpVerifyLimiter, validate(authSchemas.verifyFirebaseToken), authController.verifyFirebaseToken);
 
 module.exports = router;

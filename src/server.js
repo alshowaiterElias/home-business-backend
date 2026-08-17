@@ -16,12 +16,16 @@ const prisma = require('./config/db');
 const PORT = process.env.PORT || 5000;
 
 const { cleanupOrphanedImages } = require('./utils/cleanup');
+const { initWhatsAppBot } = require('./services/whatsappBot');
 
 const server = app.listen(PORT, () => {
   console.log(`=================================`);
   console.log(`🚀 Server is running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
   console.log(`=================================`);
+
+  // Start WhatsApp verification bot
+  initWhatsAppBot();
 
   // Run cleanup every 24 hours (24 * 60 * 60 * 1000)
   setInterval(cleanupOrphanedImages, 86400000);

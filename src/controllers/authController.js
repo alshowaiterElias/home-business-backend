@@ -1,20 +1,17 @@
 const authService = require('../services/authService');
 
-/* =========================================================
-   OLD OTP FLOW 
-   =========================================================
 const requestOTP = async (req, res, next) => {
   try {
     const { phoneNumber } = req.body;
     
     if (!phoneNumber) {
-      return res.status(400).json({ success: false, message: 'Phone number is required' });
+      return res.status(400).json({ success: false, message: 'رقم الهاتف مطلوب' });
     }
 
     const result = await authService.loginOrRegister(phoneNumber);
     res.json({ success: true, ...result });
   } catch (error) {
-    next(error);
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
@@ -23,7 +20,7 @@ const verifyOTP = async (req, res, next) => {
     const { phoneNumber, otpCode } = req.body;
     
     if (!phoneNumber || !otpCode) {
-      return res.status(400).json({ success: false, message: 'Phone number and OTP code are required' });
+      return res.status(400).json({ success: false, message: 'رقم الهاتف ورمز التحقق مطلوبان' });
     }
 
     const { token, user } = await authService.verifyOTP(phoneNumber, otpCode);
@@ -32,11 +29,20 @@ const verifyOTP = async (req, res, next) => {
     res.status(400).json({ success: false, message: error.message });
   }
 };
-========================================================= */
 
-/* =========================================================
-   NEW FIREBASE AUTH FLOW
-   ========================================================= */
+const checkStatus = async (req, res, next) => {
+  try {
+    const { phoneNumber } = req.body;
+    if (!phoneNumber) {
+      return res.status(400).json({ success: false, message: 'رقم الهاتف مطلوب' });
+    }
+    const result = await authService.checkVerificationStatus(phoneNumber);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 const verifyFirebaseToken = async (req, res, next) => {
   try {
     const { idToken } = req.body;
@@ -53,7 +59,8 @@ const verifyFirebaseToken = async (req, res, next) => {
 };
 
 module.exports = {
-  // requestOTP,
-  // verifyOTP,
+  requestOTP,
+  verifyOTP,
+  checkStatus,
   verifyFirebaseToken
 };

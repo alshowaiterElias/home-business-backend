@@ -3,37 +3,48 @@ const jwt = require('jsonwebtoken');
 const notificationService = require('./notificationService');
 const { getAuth } = require('../config/firebase');
 
-/* =========================================================
-   OLD OTP FLOW (Manually generating and sending OTP)
-   Commented out per request to switch to Firebase Auth
-   =========================================================
-// Placeholder for WhatsApp API
-// In production, replace with real WhatsApp Business API or SMS gateway
-const sendWhatsAppOTP = async (phoneNumber, otpCode) => {
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`\n=============================================`);
-    console.log(`[DEV OTP] Code ${otpCode} for ${phoneNumber}`);
-    console.log(`=============================================\n`);
+/**
+ * Normalizes phone numbers to standard E.164 format (+967XXXXXXXXX).
+ */
+const normalizePhoneNumber = (phone) => {
+  if (!phone) return '';
+  let cleaned = phone.replace(/[^\d+]/g, ''); // remove non-digits except +
+  if (cleaned.startsWith('00')) {
+    cleaned = '+' + cleaned.substring(2);
   }
-  // TODO: Integrate real SMS/WhatsApp provider for production
-  return true;
+  if (!cleaned.startsWith('+')) {
+    if (cleaned.startsWith('967')) {
+      cleaned = '+' + cleaned;
+    } else if (cleaned.length === 9 && (cleaned.startsWith('7') || cleaned.startsWith('07'))) {
+      cleaned = '+967' + (cleaned.startsWith('0') ? cleaned.substring(1) : cleaned);
+    } else {
+      cleaned = '+' + cleaned;
+    }
+  }
+  return cleaned;
 };
 
 const generateOTP = () => {
   return Math.floor(1000 + Math.random() * 9000).toString(); // 4-digit code
 };
 
-const loginOrRegister = async (phoneNumber) => {
-  // Check if user exists
+/**
+ * Generates OTP for login or registration.
+ */
+const loginOrRegister = async (rawPhone) => {
+  const phoneNumber = normalizePhoneNumber(rawPhone);
+  if (!phoneNumber || phoneNumber.length < 8) {
+    throw new Error('رقم الهاتف غير صحيح');
+  }
+
   let user = await prisma.user.findUnique({
     where: { phoneNumber }
   });
 
   const otpCode = generateOTP();
-  const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
+  const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes validity
 
   if (!user) {
-    // Register new user
     user = await prisma.user.create({
       data: {
         phoneNumber,
@@ -49,7 +60,6 @@ const loginOrRegister = async (phoneNumber) => {
       'SYSTEM_ALERT'
     );
   } else {
-    // Update existing user with new OTP
     user = await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -59,28 +69,48 @@ const loginOrRegister = async (phoneNumber) => {
     });
   }
 
-  await sendWhatsAppOTP(phoneNumber, otpCode);
-  return { message: 'OTP sent successfully via WhatsApp' };
+  console.log(`\n=============================================`);
+  console.log(`[AUTH OTP] Code: ${otpCode} for Phone: ${phoneNumber}`);
+  console.log(`=============================================\n`);
+
+  // Target business WhatsApp number configured in env (or default)
+  const businessPhone = process.env.WHATSAPP_BUSINESS_PHONE || '967770000000';
+  const message = `كود التحقق في السوق المنزلي: ${otpCode}`;
+
+  return {
+    message: 'تم إنشاء رمز التحقق بنجاح',
+    otpCode, // Returned for dev/testing or manual SMS input
+    phoneNumber,
+    businessPhone,
+    whatsappText: message,
+    whatsappUrl: `https://wa.me/${businessPhone.replace('+', '')}?text=${encodeURIComponent(message)}`
+  };
 };
 
-const verifyOTP = async (phoneNumber, otpCode) => {
+/**
+ * Verifies OTP code manually or via webhook.
+ * STRICT CHECK (Point 5): Ensures the verifying phone number matches the user's registered phone number.
+ */
+const verifyOTP = async (rawPhone, otpCode) => {
+  const phoneNumber = normalizePhoneNumber(rawPhone);
+
   const user = await prisma.user.findUnique({
     where: { phoneNumber }
   });
 
   if (!user) {
-    throw new Error('User not found');
+    throw new Error('المستخدم غير موجود');
   }
 
-  if (user.otpCode !== otpCode) {
-    throw new Error('Invalid OTP code');
+  if (!user.otpCode || user.otpCode !== otpCode.trim()) {
+    throw new Error('رمز التحقق غير صحيح');
   }
 
-  if (user.otpExpiresAt < new Date()) {
-    throw new Error('OTP has expired. Please request a new one.');
+  if (user.otpExpiresAt && user.otpExpiresAt < new Date()) {
+    throw new Error('انتهت صلاحية رمز التحقق. يرجى طلب رمز جديد.');
   }
 
-  // Clear OTP and mark as verified
+  // Mark user as verified and clear OTP
   const updatedUser = await prisma.user.update({
     where: { id: user.id },
     data: {
@@ -91,7 +121,7 @@ const verifyOTP = async (phoneNumber, otpCode) => {
     select: { id: true, phoneNumber: true, role: true, isVerified: true, business: true }
   });
 
-  // Generate JWT
+  // Issue custom JWT token
   const token = jwt.sign(
     { id: user.id, role: user.role },
     process.env.JWT_SECRET,
@@ -100,7 +130,32 @@ const verifyOTP = async (phoneNumber, otpCode) => {
 
   return { token, user: updatedUser };
 };
-========================================================= */
+
+/**
+ * Checks if user has been verified automatically (for polling after WhatsApp message sent)
+ */
+const checkVerificationStatus = async (rawPhone) => {
+  const phoneNumber = normalizePhoneNumber(rawPhone);
+
+  const user = await prisma.user.findUnique({
+    where: { phoneNumber },
+    select: { id: true, phoneNumber: true, role: true, isVerified: true, otpCode: true, business: true }
+  });
+
+  if (!user) return { isVerified: false };
+
+  // If user is verified and OTP was cleared
+  if (user.isVerified && !user.otpCode) {
+    const token = jwt.sign(
+      { id: user.id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+    return { isVerified: true, token, user };
+  }
+
+  return { isVerified: false };
+};
 
 /* =========================================================
    NEW FIREBASE AUTH FLOW
@@ -169,7 +224,8 @@ const verifyFirebaseToken = async (idToken) => {
 };
 
 module.exports = {
-  // loginOrRegister,
-  // verifyOTP,
+  loginOrRegister,
+  verifyOTP,
+  checkVerificationStatus,
   verifyFirebaseToken
 };
