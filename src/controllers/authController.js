@@ -16,10 +16,18 @@ const requestOTP = async (req, res, next) => {
 };
 
 const verifyOTP = async (req, res, next) => {
-  return res.status(400).json({ 
-    success: false, 
-    message: 'التحقق يتطلب إرسال الرسالة عبر تطبيق الواتساب حصراً لمنع التزوير.' 
-  });
+  try {
+    const { phoneNumber, otpCode } = req.body;
+    
+    if (!phoneNumber || !otpCode) {
+      return res.status(400).json({ success: false, message: 'رقم الهاتف ورمز التحقق مطلوبان' });
+    }
+
+    const result = await authService.verifyOTP(phoneNumber, otpCode);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
 };
 
 const checkStatus = async (req, res, next) => {

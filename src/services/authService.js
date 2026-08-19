@@ -30,6 +30,7 @@ const generateOTP = () => {
 
 /**
  * Generates OTP for login or registration.
+ * This is kept as a legacy/fallback endpoint.
  */
 const loginOrRegister = async (rawPhone) => {
   const phoneNumber = normalizePhoneNumber(rawPhone);
@@ -73,22 +74,14 @@ const loginOrRegister = async (rawPhone) => {
   console.log(`[AUTH OTP] Code: ${otpCode} for Phone: ${phoneNumber}`);
   console.log(`=============================================\n`);
 
-  // Target business WhatsApp number configured in env (or default)
-  const businessPhone = process.env.WHATSAPP_BUSINESS_PHONE || '967772546343';
-  const message = `كود التحقق في السوق المنزلي: ${otpCode}`;
-
   return {
-    message: 'تم إنشاء طلب التحقق بنجاح',
+    message: 'تم إرسال رمز التحقق بنجاح',
     phoneNumber,
-    businessPhone,
-    whatsappText: message,
-    whatsappUrl: `https://wa.me/${businessPhone.replace('+', '')}?text=${encodeURIComponent(message)}`
   };
 };
 
 /**
- * Verifies OTP code manually or via webhook.
- * STRICT CHECK (Point 5): Ensures the verifying phone number matches the user's registered phone number.
+ * Verifies OTP code manually.
  */
 const verifyOTP = async (rawPhone, otpCode) => {
   const phoneNumber = normalizePhoneNumber(rawPhone);
@@ -130,20 +123,11 @@ const verifyOTP = async (rawPhone, otpCode) => {
   return { token, user: updatedUser };
 };
 
-const { getVerificationError, clearVerificationError } = require('./whatsappBot');
-
 /**
- * Checks if user has been verified automatically (for polling after WhatsApp message sent)
+ * Checks if user has been verified (legacy polling endpoint).
  */
 const checkVerificationStatus = async (rawPhone) => {
   const phoneNumber = normalizePhoneNumber(rawPhone);
-
-  // Check if WhatsApp bot detected a phone mismatch or verification error
-  const error = getVerificationError(phoneNumber);
-  if (error) {
-    clearVerificationError(phoneNumber);
-    return { isVerified: false, error };
-  }
 
   const user = await prisma.user.findUnique({
     where: { phoneNumber },
@@ -166,7 +150,7 @@ const checkVerificationStatus = async (rawPhone) => {
 };
 
 /* =========================================================
-   NEW FIREBASE AUTH FLOW
+   FIREBASE AUTH FLOW (PRIMARY)
    ========================================================= */
 const verifyFirebaseToken = async (idToken) => {
   const auth = getAuth();
