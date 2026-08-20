@@ -150,7 +150,86 @@ app.get('/privacy', (req, res) => {
 });
 
 
-// 404 Handler
+// Delete Account Page (required by Google Play)
+const deleteAccountHtml = (message = '', isError = false) => `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>حذف الحساب - السوق المنزلي</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f8fafc; color: #1e293b; line-height: 1.8; }
+    header { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; padding: 40px 24px; text-align: center; }
+    header h1 { font-size: 26px; margin-bottom: 8px; }
+    header p { opacity: 0.9; font-size: 14px; }
+    .container { max-width: 600px; margin: 32px auto; padding: 0 24px 40px; }
+    .card { background: white; border-radius: 12px; padding: 32px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    label { display: block; font-weight: 600; margin-bottom: 8px; color: #374151; }
+    input { width: 100%; padding: 12px 16px; border: 1.5px solid #d1d5db; border-radius: 8px; font-size: 16px; direction: ltr; margin-bottom: 20px; outline: none; }
+    input:focus { border-color: #ef4444; }
+    button { width: 100%; padding: 14px; background: #ef4444; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 700; cursor: pointer; }
+    button:hover { background: #dc2626; }
+    .warning { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin-bottom: 20px; color: #991b1b; font-size: 14px; }
+    .success { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 20px; color: #166534; text-align: center; font-size: 16px; }
+    .error { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 20px; color: #991b1b; text-align: center; font-size: 16px; }
+    .footer { text-align: center; padding: 24px; color: #94a3b8; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🗑️ حذف الحساب</h1>
+    <p>السوق المنزلي — طلب حذف الحساب والبيانات</p>
+  </header>
+  <div class="container">
+    ${message ? `<div class="${isError ? 'error' : 'success'}">${message}</div>` : `
+    <div class="card">
+      <div class="warning">
+        ⚠️ <strong>تحذير:</strong> سيؤدي هذا الإجراء إلى حذف حسابك ومتجرك وجميع منتجاتك وبياناتك بشكل نهائي ولا يمكن التراجع عنه.
+      </div>
+      <label for="phone">رقم الهاتف المسجل في التطبيق</label>
+      <form method="POST" action="/delete-account">
+        <input type="tel" id="phone" name="phone" placeholder="+967 7XX XXX XXX" required>
+        <button type="submit">تأكيد حذف الحساب نهائياً</button>
+      </form>
+    </div>
+    `}
+  </div>
+  <div class="footer">© 2026 السوق المنزلي</div>
+</body>
+</html>`;
+
+app.get('/delete-account', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(deleteAccountHtml());
+});
+
+app.post('/delete-account', express.urlencoded({ extended: true }), async (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  try {
+    const prisma = require('./config/db');
+    let phone = (req.body.phone || '').trim().replace(/\s/g, '');
+    if (!phone) {
+      return res.send(deleteAccountHtml('⚠️ يرجى إدخال رقم الهاتف.', true));
+    }
+    // Normalize to +967 format
+    if (!phone.startsWith('+')) phone = '+' + phone;
+
+    const user = await prisma.user.findUnique({ where: { phoneNumber: phone } });
+    if (!user) {
+      return res.send(deleteAccountHtml('❌ لم يتم العثور على حساب مرتبط بهذا الرقم. تأكد من الرقم وحاول مرة أخرى.', true));
+    }
+
+    await prisma.user.delete({ where: { id: user.id } });
+
+    res.send(deleteAccountHtml('✅ تم حذف حسابك وجميع بياناتك بنجاح. نأسف لمغادرتك وندعوك للعودة مجدداً!', false));
+  } catch (err) {
+    console.error('Delete account error:', err);
+    res.send(deleteAccountHtml('❌ حدث خطأ أثناء الحذف. يرجى المحاولة لاحقاً.', true));
+  }
+});
+
+
 app.use((req, res, next) => {
   res.status(404).json({ message: 'Route not found' });
 });
