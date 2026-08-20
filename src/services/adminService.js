@@ -1,6 +1,59 @@
 const prisma = require('../config/db');
 const notificationService = require('./notificationService');
 
+const getDashboardStats = async () => {
+  const [
+    totalUsers,
+    totalBusinesses,
+    totalProducts,
+    pendingProductsCount,
+    approvedProductsCount,
+    totalCategories,
+    totalCities,
+    pendingReportsCount,
+    totalReviews
+  ] = await Promise.all([
+    prisma.user.count(),
+    prisma.business.count(),
+    prisma.product.count(),
+    prisma.product.count({ where: { status: 'PENDING' } }),
+    prisma.product.count({ where: { status: 'APPROVED' } }),
+    prisma.category.count(),
+    prisma.city.count(),
+    prisma.report.count({ where: { status: 'PENDING' } }),
+    prisma.productReview.count()
+  ]);
+
+  const recentUsers = await prisma.user.findMany({
+    take: 5,
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, phoneNumber: true, role: true, isVerified: true, createdAt: true, business: { select: { businessName: true } } }
+  });
+
+  const recentPendingProducts = await prisma.product.findMany({
+    take: 5,
+    where: { status: 'PENDING' },
+    include: { business: true, category: true, images: true },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  return {
+    totals: {
+      users: totalUsers,
+      businesses: totalBusinesses,
+      products: totalProducts,
+      pendingProducts: pendingProductsCount,
+      approvedProducts: approvedProductsCount,
+      categories: totalCategories,
+      cities: totalCities,
+      pendingReports: pendingReportsCount,
+      reviews: totalReviews
+    },
+    recentUsers,
+    recentPendingProducts
+  };
+};
+
 const getPendingProducts = async () => {
   return await prisma.product.findMany({
     where: { status: 'PENDING' },
@@ -8,6 +61,28 @@ const getPendingProducts = async () => {
       business: true,
       images: true,
       category: true
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+};
+
+const getAllProducts = async ({ status, categoryId, search }) => {
+  const where = {};
+  if (status) where.status = status;
+  if (categoryId) where.categoryId = categoryId;
+  if (search) {
+    where.OR = [
+      { title: { contains: search } },
+      { description: { contains: search } }
+    ];
+  }
+
+  return await prisma.product.findMany({
+    where,
+    include: {
+      business: { select: { id: true, businessName: true, contactPhone: true } },
+      category: { select: { id: true, nameAr: true } },
+      images: true
     },
     orderBy: { createdAt: 'desc' }
   });
@@ -31,7 +106,7 @@ const updateProductStatus = async (adminId, productId, status, rejectionReason =
     }
   });
 
-  // Notify the seller
+  // Notify seller
   const business = await prisma.business.findUnique({ where: { id: product.businessId } });
   if (business) {
     if (status === 'APPROVED') {
@@ -54,9 +129,122 @@ const updateProductStatus = async (adminId, productId, status, rejectionReason =
   return product;
 };
 
+const deleteProductByAdmin = async (adminId, productId) => {
+  const product = await prisma.product.delete({ where: { id: productId } });
+
+  await prisma.adminAuditLog.create({
+    data: {
+      adminId,
+      action: 'DELETE_PRODUCT',
+      targetId: productId,
+      details: { title: product.title }
+    }
+  });
+
+  return product;
+};
+
+const getAllUsers = async () => {
+  return await prisma.user.findMany({
+    include: {
+      business: {
+        include: { city: { include: { governorate: true } } }
+      },
+      _count: { select: { reviews: true, reports: true } }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+};
+
+const updateUserRole = async (adminId, userId, role) => {
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: { role }
+  });
+
+  await prisma.adminAuditLog.create({
+    data: {
+      adminId,
+      action: 'UPDATE_USER_ROLE',
+      targetId: userId,
+      details: { newRole: role }
+    }
+  });
+
+  return user;
+};
+
+const deleteUser = async (adminId, userId) => {
+  const user = await prisma.user.delete({ where: { id: userId } });
+
+  await prisma.adminAuditLog.create({
+    data: {
+      adminId,
+      action: 'DELETE_USER',
+      targetId: userId,
+      details: { phoneNumber: user.phoneNumber }
+    }
+  });
+
+  return user;
+};
+
+const getAllBusinesses = async () => {
+  return await prisma.business.findMany({
+    include: {
+      user: { select: { id: true, phoneNumber: true, role: true, createdAt: true } },
+      city: { include: { governorate: true } },
+      _count: { select: { products: true } }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+};
+
+const toggleBusinessStatus = async (adminId, businessId, isActive) => {
+  const business = await prisma.business.update({
+    where: { id: businessId },
+    data: { isActive }
+  });
+
+  await prisma.adminAuditLog.create({
+    data: {
+      adminId,
+      action: isActive ? 'ENABLE_BUSINESS' : 'DISABLE_BUSINESS',
+      targetId: businessId,
+      details: { businessName: business.businessName }
+    }
+  });
+
+  return business;
+};
+
+const getAllReviews = async () => {
+  return await prisma.productReview.findMany({
+    include: {
+      user: { select: { id: true, phoneNumber: true } },
+      product: { select: { id: true, title: true } }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+};
+
+const deleteReview = async (adminId, reviewId) => {
+  const review = await prisma.productReview.delete({ where: { id: reviewId } });
+
+  await prisma.adminAuditLog.create({
+    data: {
+      adminId,
+      action: 'DELETE_REVIEW',
+      targetId: reviewId,
+      details: { comment: review.comment }
+    }
+  });
+
+  return review;
+};
+
 const getReports = async () => {
   return await prisma.report.findMany({
-    where: { status: 'PENDING' },
     include: { reporter: { select: { phoneNumber: true } } },
     orderBy: { createdAt: 'desc' }
   });
@@ -82,15 +270,25 @@ const resolveReport = async (adminId, reportId) => {
 
 const getAuditLogs = async () => {
   return await prisma.adminAuditLog.findMany({
-    take: 100, // Limit payload to recent 100 logs
+    take: 100,
     include: { admin: { select: { phoneNumber: true } } },
     orderBy: { createdAt: 'desc' }
   });
 };
 
 module.exports = {
+  getDashboardStats,
   getPendingProducts,
+  getAllProducts,
   updateProductStatus,
+  deleteProductByAdmin,
+  getAllUsers,
+  updateUserRole,
+  deleteUser,
+  getAllBusinesses,
+  toggleBusinessStatus,
+  getAllReviews,
+  deleteReview,
   getReports,
   resolveReport,
   getAuditLogs
