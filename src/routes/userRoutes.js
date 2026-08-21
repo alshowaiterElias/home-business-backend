@@ -7,5 +7,7 @@ const { protect } = require('../middlewares/authMiddleware');
 router.post('/device-token', protect, userController.saveDeviceToken);
 // Get user profile
 router.get('/profile', protect, userController.getProfile);
+// Request account deletion (In-App user deletion)
+router.post('/delete-account', protect, userController.deleteAccount);
 
 module.exports = router;

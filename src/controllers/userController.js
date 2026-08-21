@@ -23,4 +23,14 @@ const getProfile = async (req, res, next) => {
   }
 };
 
-module.exports = { saveDeviceToken, getProfile };
+const deleteAccount = async (req, res, next) => {
+  try {
+    const { reason } = req.body;
+    const result = await userService.requestAccountDeletion(req.user.id, reason);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = { saveDeviceToken, getProfile, deleteAccount };

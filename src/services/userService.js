@@ -39,4 +39,45 @@ const getUserProfile = async (userId) => {
   return user;
 };
 
-module.exports = { saveDeviceToken, getUserProfile };
+const requestAccountDeletion = async (userId, reason = '') => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { business: true }
+  });
+
+  if (!user) {
+    throw new Error('المستخدم غير موجود');
+  }
+
+  if (user.role === 'ADMIN') {
+    throw new Error('لا يمكن حذف حساب المسؤول الرئيسي عبر التطبيق');
+  }
+
+  // If user owns a business, deactivate business & products first
+  if (user.business) {
+    await prisma.business.update({
+      where: { id: user.business.id },
+      data: { isActive: false }
+    });
+
+    await prisma.product.updateMany({
+      where: { businessId: user.business.id },
+      data: { status: 'REJECTED', rejectionReason: 'تم توقيف المنتج بسبب حذف حساب التاجر' }
+    });
+  }
+
+  // Delete device tokens & user account
+  await prisma.deviceToken.deleteMany({ where: { userId } });
+  
+  const deletedUser = await prisma.user.delete({
+    where: { id: userId }
+  });
+
+  return {
+    deleted: true,
+    phoneNumber: deletedUser.phoneNumber,
+    message: 'تم حذف حسابك وجميع بياناتك المتعلقة بنجاح'
+  };
+};
+
+module.exports = { saveDeviceToken, getUserProfile, requestAccountDeletion };
