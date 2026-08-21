@@ -9,5 +9,7 @@ router.post('/device-token', protect, userController.saveDeviceToken);
 router.get('/profile', protect, userController.getProfile);
 // Request account deletion (In-App user deletion)
 router.post('/delete-account', protect, userController.deleteAccount);
+router.delete('/delete-account', protect, userController.deleteAccount);
+router.delete('/account', protect, userController.deleteAccount);
 
 module.exports = router;

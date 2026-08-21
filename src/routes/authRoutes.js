@@ -12,4 +12,9 @@ router.post('/check-status', authController.checkStatus);
 // Firebase Token Route (legacy option)
 router.post('/verify-firebase-token', otpVerifyLimiter, validate(authSchemas.verifyFirebaseToken), authController.verifyFirebaseToken);
 
+// Delete account alias
+const userController = require('../controllers/userController');
+const { protect } = require('../middlewares/authMiddleware');
+router.post('/delete-account', protect, userController.deleteAccount);
+
 module.exports = router;
