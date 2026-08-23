@@ -88,6 +88,9 @@ const getAllProducts = async ({ status, categoryId, search }) => {
   });
 };
 
+const notificationService = require('./notificationService');
+const fcmService = require('./fcmService');
+
 const updateProductStatus = async (adminId, productId, status, rejectionReason = null) => {
   const product = await prisma.product.update({
     where: { id: productId },
@@ -106,23 +109,19 @@ const updateProductStatus = async (adminId, productId, status, rejectionReason =
     }
   });
 
-  // Notify seller
+  // Notify seller (Database + FCM Push)
   const business = await prisma.business.findUnique({ where: { id: product.businessId } });
   if (business) {
     if (status === 'APPROVED') {
-      await notificationService.createNotification(
-        business.userId,
-        'تم قبول منتجك',
-        `تمت الموافقة على "${product.title}" وهو الآن متاح للعملاء.`,
-        'PRODUCT_APPROVED'
-      );
+      const title = 'تم قبول منتجك 🎉';
+      const body = `تمت الموافقة على "${product.title}" وهو الآن متاح للعملاء في التطبيق.`;
+      await notificationService.createNotification(business.userId, title, body, 'PRODUCT_APPROVED');
+      await fcmService.sendToUser(business.userId, title, body, { type: 'PRODUCT_APPROVED', productId });
     } else if (status === 'REJECTED') {
-      await notificationService.createNotification(
-        business.userId,
-        'تم رفض منتجك',
-        `تم رفض "${product.title}" — السبب: ${rejectionReason}`,
-        'PRODUCT_REJECTED'
-      );
+      const title = 'تم رفض منتجك ⚠️';
+      const body = `تم رفض "${product.title}" — السبب: ${rejectionReason}`;
+      await notificationService.createNotification(business.userId, title, body, 'PRODUCT_REJECTED');
+      await fcmService.sendToUser(business.userId, title, body, { type: 'PRODUCT_REJECTED', productId, rejectionReason });
     }
   }
 
@@ -268,11 +267,48 @@ const resolveReport = async (adminId, reportId) => {
   return report;
 };
 
-const getAuditLogs = async () => {
+const broadcastPushNotification = async (adminId, { targetType, targetUserId, title, body, notificationType = 'SYSTEM_ALERT' }) => {
+  let result;
+  if (targetType === 'USER' && targetUserId) {
+    result = await fcmService.sendToUser(targetUserId, title, body, { type: notificationType });
+    await notificationService.createNotification(targetUserId, title, body, notificationType);
+  } else {
+    result = await fcmService.sendToAllOrRole(targetType, title, body, { type: notificationType });
+    // Also save in-app notification for all matching users
+    let whereUser = {};
+    if (targetType === 'SELLERS') whereUser = { business: { isNot: null } };
+    const targetUsers = await prisma.user.findMany({ where: whereUser, select: { id: true } });
+    if (targetUsers.length > 0) {
+      await prisma.notification.createMany({
+        data: targetUsers.map((u) => ({
+          userId: u.id,
+          title,
+          body,
+          type: notificationType
+        }))
+      });
+    }
+  }
+
+  // Audit log
+  await prisma.adminAuditLog.create({
+    data: {
+      adminId,
+      action: 'BROADCAST_NOTIFICATION',
+      targetId: targetUserId || 'GLOBAL',
+      details: { title, body, targetType, notificationType, delivered: result.delivered || 0 }
+    }
+  });
+
+  return result;
+};
+
+const getBroadcastHistory = async () => {
   return await prisma.adminAuditLog.findMany({
-    take: 100,
+    where: { action: 'BROADCAST_NOTIFICATION' },
     include: { admin: { select: { phoneNumber: true } } },
-    orderBy: { createdAt: 'desc' }
+    orderBy: { createdAt: 'desc' },
+    take: 50
   });
 };
 
@@ -291,5 +327,7 @@ module.exports = {
   deleteReview,
   getReports,
   resolveReport,
-  getAuditLogs
+  getAuditLogs,
+  broadcastPushNotification,
+  getBroadcastHistory
 };

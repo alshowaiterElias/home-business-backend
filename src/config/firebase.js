@@ -1,6 +1,7 @@
 const { initializeApp, cert, getApps } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getStorage } = require('firebase-admin/storage');
+const { getMessaging } = require('firebase-admin/messaging');
 const fs = require('fs');
 const path = require('path');
 
@@ -26,13 +27,14 @@ try {
     bucket = getStorage(adminApp).bucket();
     console.log(`✅ Firebase Admin SDK initialized successfully (Bucket: ${bucket.name})`);
   } else {
-    console.warn(`⚠️ WARNING: Firebase service account key not found at ${serviceAccountPath}. Firebase Auth & Storage will fail until provided.`);
+    console.warn(`⚠️ WARNING: Firebase service account key not found at ${serviceAccountPath}. Firebase Auth, Storage & Messaging will fallback.`);
   }
 } catch (error) {
   console.error('❌ Failed to initialize Firebase Admin SDK:', error.message);
 }
 
 module.exports = {
-  getAuth: () => adminApp ? getAuth(adminApp) : null,
+  getAuth: () => (adminApp ? getAuth(adminApp) : null),
   getBucket: () => bucket,
+  getMessaging: () => (adminApp ? getMessaging(adminApp) : null)
 };

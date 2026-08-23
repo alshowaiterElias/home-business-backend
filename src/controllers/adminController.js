@@ -153,6 +153,36 @@ const getAuditLogs = async (req, res, next) => {
   }
 };
 
+const sendBroadcastNotification = async (req, res, next) => {
+  try {
+    const { targetType, targetUserId, title, body, notificationType } = req.body;
+    if (!title || !body) {
+      return res.status(400).json({ success: false, message: 'العنوان ومحتوى الإشعار مطلوبان' });
+    }
+
+    const result = await adminService.broadcastPushNotification(req.user.id, {
+      targetType: targetType || 'ALL',
+      targetUserId,
+      title,
+      body,
+      notificationType: notificationType || 'SYSTEM_ALERT'
+    });
+
+    res.json({ success: true, message: 'تم إرسال الإشعار بنجاح', data: result });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+const getBroadcastHistory = async (req, res, next) => {
+  try {
+    const history = await adminService.getBroadcastHistory();
+    res.json({ success: true, data: history });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getDashboardStats,
   getPendingProducts,
@@ -169,5 +199,7 @@ module.exports = {
   deleteReview,
   getReports,
   resolveReport,
-  getAuditLogs
+  getAuditLogs,
+  sendBroadcastNotification,
+  getBroadcastHistory
 };

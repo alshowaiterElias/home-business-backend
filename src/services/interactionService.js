@@ -1,5 +1,6 @@
 const prisma = require('../config/db');
 const notificationService = require('./notificationService');
+const fcmService = require('./fcmService');
 
 const toggleFavorite = async (userId, productId) => {
   const existing = await prisma.favoriteProduct.findUnique({
@@ -67,12 +68,10 @@ const addReview = async (userId, productId, rating, comment) => {
   if (business && business.userId !== userId) {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     const userName = user?.phoneNumber || 'مستخدم';
-    await notificationService.createNotification(
-      business.userId,
-      'تقييم جديد',
-      `قام ${userName} بتقييم منتج "${product.title}" بـ ${rating} نجوم.`,
-      'NEW_REVIEW'
-    );
+    const title = 'تقييم جديد ⭐';
+    const body = `قام ${userName} بتقييم منتج "${product.title}" بـ ${rating} نجوم.`;
+    await notificationService.createNotification(business.userId, title, body, 'NEW_REVIEW');
+    await fcmService.sendToUser(business.userId, title, body, { type: 'NEW_REVIEW', productId });
   }
 
   return review;

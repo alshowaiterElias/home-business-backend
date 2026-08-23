@@ -36,4 +36,8 @@ router.put('/reports/:id/resolve', adminController.resolveReport);
 // Audit Logs
 router.get('/audit-logs', adminController.getAuditLogs);
 
+// Push Notifications Broadcast
+router.post('/notifications/broadcast', adminController.sendBroadcastNotification);
+router.get('/notifications/broadcast-history', adminController.getBroadcastHistory);
+
 module.exports = router;
