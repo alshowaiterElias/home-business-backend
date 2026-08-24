@@ -4,9 +4,16 @@
  * Manages WhatsApp integration via Evolution API (Baileys REST gateway).
  */
 
-const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || '';
-const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || '';
-const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'home-business';
+const getCleanBaseUrl = () => {
+  let url = (process.env.EVOLUTION_API_URL || '').trim();
+  if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
+    url = `https://${url}`;
+  }
+  return url.replace(/\/+$/, '');
+};
+
+const EVOLUTION_API_KEY = (process.env.EVOLUTION_API_KEY || '').trim();
+const EVOLUTION_INSTANCE = (process.env.EVOLUTION_INSTANCE || 'home-business').trim();
 
 /**
  * Normalizes phone number for WhatsApp delivery.
@@ -17,10 +24,32 @@ const normalizeForWhatsApp = (phone) => {
 };
 
 /**
+ * Helper function to safely execute fetch and parse JSON or handle HTML error pages gracefully.
+ */
+const safeFetchJson = async (url, options = {}) => {
+  const response = await fetch(url, options);
+  const contentType = response.headers.get('content-type') || '';
+
+  if (contentType.includes('application/json')) {
+    const data = await response.json();
+    return { ok: response.ok, status: response.status, data };
+  } else {
+    const text = await response.text();
+    console.error(`[Evolution API] Non-JSON HTML response (${response.status}) from ${url}:`, text.substring(0, 300));
+    return {
+      ok: false,
+      status: response.status,
+      data: { message: `Evolution API returned status ${response.status} (${response.statusText}). Check API URL configuration.` }
+    };
+  }
+};
+
+/**
  * Sends OTP code via WhatsApp using Evolution API.
  */
 const sendOTP = async (phoneNumber, otpCode) => {
-  if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
+  const baseUrl = getCleanBaseUrl();
+  if (!baseUrl || !EVOLUTION_API_KEY) {
     console.warn('⚠️ Evolution API not configured. OTP will only be logged to console.');
     console.log(`\n=============================================`);
     console.log(`[EVOLUTION OTP FALLBACK] Code: ${otpCode} for Phone: ${phoneNumber}`);
@@ -32,9 +61,8 @@ const sendOTP = async (phoneNumber, otpCode) => {
   const messageText = `🏠 *السوق المنزلي* — رمز التحقق\n\nرمز التحقق الخاص بك هو: *${otpCode}*\n\nصالح لمدة 15 دقيقة. لا تشاركه مع أحد.`;
 
   try {
-    const url = `${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE}`;
-
-    const response = await fetch(url, {
+    const url = `${baseUrl}/message/sendText/${EVOLUTION_INSTANCE}`;
+    const result = await safeFetchJson(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -46,14 +74,12 @@ const sendOTP = async (phoneNumber, otpCode) => {
       })
     });
 
-    const data = await response.json();
-
-    if (response.ok) {
+    if (result.ok) {
       console.log(`[Evolution API] ✅ OTP sent successfully to ${phoneNumber}`);
       return { success: true, message: 'OTP sent via WhatsApp' };
     } else {
-      console.error(`[Evolution API] ❌ Failed to send OTP:`, data);
-      return { success: false, message: data?.message || 'Failed to send OTP via WhatsApp' };
+      console.error(`[Evolution API] ❌ Failed to send OTP:`, result.data);
+      return { success: false, message: result.data?.message || 'Failed to send OTP via WhatsApp' };
     }
   } catch (error) {
     console.error(`[Evolution API] ❌ Request error:`, error.message);
@@ -68,16 +94,16 @@ const sendOTP = async (phoneNumber, otpCode) => {
  * Sends a custom test message via WhatsApp.
  */
 const sendTestMessage = async (phoneNumber, customText) => {
-  if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
+  const baseUrl = getCleanBaseUrl();
+  if (!baseUrl || !EVOLUTION_API_KEY) {
     throw new Error('EVOLUTION_API_URL or EVOLUTION_API_KEY is not configured in backend environment.');
   }
 
   const waNumber = normalizeForWhatsApp(phoneNumber);
   const messageText = customText || `🏠 *السوق المنزلي*\n\nرسالة تجريبية لاختبار ربط الواتساب بنجاح! ✅`;
 
-  const url = `${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE}`;
-
-  const response = await fetch(url, {
+  const url = `${baseUrl}/message/sendText/${EVOLUTION_INSTANCE}`;
+  const result = await safeFetchJson(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -89,44 +115,41 @@ const sendTestMessage = async (phoneNumber, customText) => {
     })
   });
 
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data?.message || 'Failed to send WhatsApp test message');
+  if (!result.ok) {
+    throw new Error(result.data?.message || 'Failed to send WhatsApp test message');
   }
 
-  return data;
+  return result.data;
 };
 
 /**
  * Checks instance connection status.
  */
 const getInstanceStatus = async () => {
-  if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
+  const baseUrl = getCleanBaseUrl();
+  if (!baseUrl || !EVOLUTION_API_KEY) {
     return {
       configured: false,
       connected: false,
       instance: EVOLUTION_INSTANCE,
       state: 'not_configured',
-      apiUrl: EVOLUTION_API_URL || null
+      apiUrl: baseUrl || null
     };
   }
 
   try {
-    const url = `${EVOLUTION_API_URL}/instance/connectionState/${EVOLUTION_INSTANCE}`;
-    const response = await fetch(url, {
+    const url = `${baseUrl}/instance/connectionState/${EVOLUTION_INSTANCE}`;
+    const result = await safeFetchJson(url, {
       headers: { 'apikey': EVOLUTION_API_KEY }
     });
 
-    const data = await response.json();
-
     return {
       configured: true,
-      connected: data?.instance?.state === 'open',
+      connected: result.data?.instance?.state === 'open',
       instance: EVOLUTION_INSTANCE,
-      state: data?.instance?.state || 'close',
-      apiUrl: EVOLUTION_API_URL,
-      data: data?.instance || {}
+      state: result.data?.instance?.state || 'close',
+      apiUrl: baseUrl,
+      data: result.data?.instance || {}
     };
   } catch (error) {
     return {
@@ -134,7 +157,7 @@ const getInstanceStatus = async () => {
       connected: false,
       instance: EVOLUTION_INSTANCE,
       state: 'error',
-      apiUrl: EVOLUTION_API_URL,
+      apiUrl: baseUrl,
       error: error.message
     };
   }
@@ -144,25 +167,25 @@ const getInstanceStatus = async () => {
  * Fetches QR Code (base64 image) for scanning.
  */
 const getQRCode = async () => {
-  if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
+  const baseUrl = getCleanBaseUrl();
+  if (!baseUrl || !EVOLUTION_API_KEY) {
     throw new Error('Evolution API is not configured.');
   }
 
-  const url = `${EVOLUTION_API_URL}/instance/connect/${EVOLUTION_INSTANCE}`;
-  const response = await fetch(url, {
+  const url = `${baseUrl}/instance/connect/${EVOLUTION_INSTANCE}`;
+  const result = await safeFetchJson(url, {
     headers: { 'apikey': EVOLUTION_API_KEY }
   });
 
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data?.message || 'Failed to fetch QR Code');
+  if (!result.ok) {
+    throw new Error(result.data?.message || 'Failed to fetch QR Code');
   }
 
   return {
-    base64: data?.base64 || null,
-    code: data?.code || null,
-    pairingCode: data?.pairingCode || null,
-    count: data?.count || 0
+    base64: result.data?.base64 || null,
+    code: result.data?.code || null,
+    pairingCode: result.data?.pairingCode || null,
+    count: result.data?.count || 0
   };
 };
 
@@ -170,24 +193,24 @@ const getQRCode = async () => {
  * Fetches 8-character Pairing Code for a given phone number.
  */
 const getPairingCode = async (phoneNumber) => {
-  if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
+  const baseUrl = getCleanBaseUrl();
+  if (!baseUrl || !EVOLUTION_API_KEY) {
     throw new Error('Evolution API is not configured.');
   }
 
   const cleanPhone = normalizeForWhatsApp(phoneNumber);
-  const url = `${EVOLUTION_API_URL}/instance/connect/${EVOLUTION_INSTANCE}?number=${cleanPhone}`;
-  const response = await fetch(url, {
+  const url = `${baseUrl}/instance/connect/${EVOLUTION_INSTANCE}?number=${cleanPhone}`;
+  const result = await safeFetchJson(url, {
     headers: { 'apikey': EVOLUTION_API_KEY }
   });
 
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data?.message || 'Failed to fetch Pairing Code');
+  if (!result.ok) {
+    throw new Error(result.data?.message || 'Failed to fetch Pairing Code');
   }
 
   return {
-    pairingCode: data?.pairingCode || null,
-    code: data?.code || null
+    pairingCode: result.data?.pairingCode || null,
+    code: result.data?.code || null
   };
 };
 
@@ -195,12 +218,13 @@ const getPairingCode = async (phoneNumber) => {
  * Creates a new instance.
  */
 const createInstance = async (qrcode = true) => {
-  if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
+  const baseUrl = getCleanBaseUrl();
+  if (!baseUrl || !EVOLUTION_API_KEY) {
     throw new Error('Evolution API is not configured.');
   }
 
-  const url = `${EVOLUTION_API_URL}/instance/create`;
-  const response = await fetch(url, {
+  const url = `${baseUrl}/instance/create`;
+  const result = await safeFetchJson(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -213,30 +237,29 @@ const createInstance = async (qrcode = true) => {
     })
   });
 
-  const data = await response.json();
-  if (!response.ok && response.status !== 403) {
-    throw new Error(data?.message || 'Failed to create instance');
+  if (!result.ok && result.status !== 403) {
+    throw new Error(result.data?.message || 'Failed to create instance');
   }
 
-  return data;
+  return result.data;
 };
 
 /**
  * Deletes / disconnects an existing instance.
  */
 const deleteInstance = async () => {
-  if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
+  const baseUrl = getCleanBaseUrl();
+  if (!baseUrl || !EVOLUTION_API_KEY) {
     throw new Error('Evolution API is not configured.');
   }
 
-  const url = `${EVOLUTION_API_URL}/instance/delete/${EVOLUTION_INSTANCE}`;
-  const response = await fetch(url, {
+  const url = `${baseUrl}/instance/delete/${EVOLUTION_INSTANCE}`;
+  const result = await safeFetchJson(url, {
     method: 'DELETE',
     headers: { 'apikey': EVOLUTION_API_KEY }
   });
 
-  const data = await response.json();
-  return data;
+  return result.data;
 };
 
 module.exports = {
