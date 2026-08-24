@@ -248,6 +248,14 @@ const getReports = async () => {
   });
 };
 
+const getAuditLogs = async () => {
+  return await prisma.adminAuditLog.findMany({
+    include: { admin: { select: { id: true, phoneNumber: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 100
+  });
+};
+
 const resolveReport = async (adminId, reportId) => {
   const report = await prisma.report.update({
     where: { id: reportId },
