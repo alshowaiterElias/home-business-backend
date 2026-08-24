@@ -40,4 +40,12 @@ router.get('/audit-logs', adminController.getAuditLogs);
 router.post('/notifications/broadcast', adminController.sendBroadcastNotification);
 router.get('/notifications/broadcast-history', adminController.getBroadcastHistory);
 
+// WhatsApp Gateway Management (Evolution API)
+router.get('/whatsapp/status', adminController.getWhatsAppStatus);
+router.get('/whatsapp/qr', adminController.getWhatsAppQR);
+router.get('/whatsapp/pairing-code', adminController.getWhatsAppPairingCode);
+router.post('/whatsapp/instance', adminController.createWhatsAppInstance);
+router.delete('/whatsapp/instance', adminController.deleteWhatsAppInstance);
+router.post('/whatsapp/send-test', adminController.sendWhatsAppTestMessage);
+
 module.exports = router;

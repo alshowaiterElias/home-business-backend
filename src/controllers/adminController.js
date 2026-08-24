@@ -183,6 +183,71 @@ const getBroadcastHistory = async (req, res, next) => {
   }
 };
 
+const evolutionService = require('../services/evolutionService');
+
+const getWhatsAppStatus = async (req, res, next) => {
+  try {
+    const status = await evolutionService.getInstanceStatus();
+    res.json({ success: true, data: status });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+const getWhatsAppQR = async (req, res, next) => {
+  try {
+    const qrData = await evolutionService.getQRCode();
+    res.json({ success: true, data: qrData });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+const getWhatsAppPairingCode = async (req, res, next) => {
+  try {
+    const { phoneNumber } = req.query;
+    if (!phoneNumber) {
+      return res.status(400).json({ success: false, message: 'رقم الهاتف مطلوب' });
+    }
+    const data = await evolutionService.getPairingCode(phoneNumber);
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+const createWhatsAppInstance = async (req, res, next) => {
+  try {
+    const { qrcode } = req.body;
+    const data = await evolutionService.createInstance(qrcode !== false);
+    res.json({ success: true, message: 'تم إنشاء الجلسة بنجاح', data });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+const deleteWhatsAppInstance = async (req, res, next) => {
+  try {
+    const data = await evolutionService.deleteInstance();
+    res.json({ success: true, message: 'تم حذف الجلسة وإعادة الضبط بنجاح', data });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+const sendWhatsAppTestMessage = async (req, res, next) => {
+  try {
+    const { phoneNumber, text } = req.body;
+    if (!phoneNumber) {
+      return res.status(400).json({ success: false, message: 'رقم المستلم مطلوب' });
+    }
+    const data = await evolutionService.sendTestMessage(phoneNumber, text);
+    res.json({ success: true, message: 'تم إرسال الرسالة التجريبية بنجاح عبر الواتساب! ✅', data });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getDashboardStats,
   getPendingProducts,
@@ -201,5 +266,12 @@ module.exports = {
   resolveReport,
   getAuditLogs,
   sendBroadcastNotification,
-  getBroadcastHistory
+  getBroadcastHistory,
+  getWhatsAppStatus,
+  getWhatsAppQR,
+  getWhatsAppPairingCode,
+  createWhatsAppInstance,
+  deleteWhatsAppInstance,
+  sendWhatsAppTestMessage
 };
+
