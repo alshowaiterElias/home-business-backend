@@ -17,7 +17,7 @@ const generateProductAd = async (req, res, next) => {
       where: { id: productId },
       include: {
         category: { select: { nameAr: true } },
-        business: { select: { name: true } }
+        business: { select: { businessName: true } }
       }
     });
 
@@ -32,7 +32,7 @@ const generateProductAd = async (req, res, next) => {
       unit: product.unit || '',
       description: product.description || '',
       category: product.category?.nameAr || 'عام',
-      businessName: product.business?.name || 'السوق المنزلي'
+      businessName: product.business?.businessName || 'السوق المنزلي'
     };
 
     const result = await aiService.generateProductAds(productInfo);
