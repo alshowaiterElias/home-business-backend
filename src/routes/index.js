@@ -15,6 +15,7 @@ const userRoutes = require('./userRoutes');
 const adminRoutes = require('./adminRoutes');
 const notificationRoutes = require('./notificationRoutes');
 const whatsappRoutes = require('./whatsappRoutes');
+const aiRoutes = require('./aiRoutes');
 
 router.use('/auth', authRoutes);
 router.use('/taxonomy', taxonomyRoutes);
@@ -25,6 +26,7 @@ router.use('/users', userRoutes);
 router.use('/admin', adminRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/whatsapp', whatsappRoutes);
+router.use('/ai', aiRoutes);
 
 // API Health check route (verifies DB connectivity)
 router.get('/health', async (req, res) => {
