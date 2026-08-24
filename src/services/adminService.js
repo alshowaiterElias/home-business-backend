@@ -88,7 +88,6 @@ const getAllProducts = async ({ status, categoryId, search }) => {
   });
 };
 
-const notificationService = require('./notificationService');
 const fcmService = require('./fcmService');
 
 const updateProductStatus = async (adminId, productId, status, rejectionReason = null) => {

@@ -43,6 +43,9 @@ const checkStatus = async (req, res, next) => {
   }
 };
 
+/* =========================================================================
+   LEGACY: Firebase Token verification handler (commented out)
+   =========================================================================
 const verifyFirebaseToken = async (req, res, next) => {
   try {
     const { idToken } = req.body;
@@ -57,10 +60,11 @@ const verifyFirebaseToken = async (req, res, next) => {
     res.status(401).json({ success: false, message: error.message });
   }
 };
+   ========================================================================= */
 
 module.exports = {
   requestOTP,
   verifyOTP,
   checkStatus,
-  verifyFirebaseToken
+  // verifyFirebaseToken // LEGACY: Firebase auth disabled
 };

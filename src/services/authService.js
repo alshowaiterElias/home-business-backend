@@ -1,7 +1,12 @@
 const prisma = require('../config/db');
 const jwt = require('jsonwebtoken');
 const notificationService = require('./notificationService');
-const { getAuth } = require('../config/firebase');
+const evolutionService = require('./evolutionService');
+
+// =========================================================================
+// LEGACY FIREBASE AUTH IMPORTS (commented out — pivoted to Evolution API)
+// =========================================================================
+// const { getAuth } = require('../config/firebase');
 
 /**
  * Normalizes phone numbers to standard E.164 format (+967XXXXXXXXX).
@@ -30,7 +35,7 @@ const generateOTP = () => {
 
 /**
  * Generates OTP for login or registration.
- * This is kept as a legacy/fallback endpoint.
+ * Sends OTP via Evolution API (WhatsApp) instead of SMS/Firebase.
  */
 const loginOrRegister = async (rawPhone) => {
   const phoneNumber = normalizePhoneNumber(rawPhone);
@@ -70,18 +75,26 @@ const loginOrRegister = async (rawPhone) => {
     });
   }
 
+  // Send OTP via Evolution API (WhatsApp)
+  const sendResult = await evolutionService.sendOTP(phoneNumber, otpCode);
+
+  // Always log to console as a fallback for debugging
   console.log(`\n=============================================`);
   console.log(`[AUTH OTP] Code: ${otpCode} for Phone: ${phoneNumber}`);
+  console.log(`[AUTH OTP] WhatsApp delivery: ${sendResult.success ? '✅ Sent' : '⚠️ Fallback (console only)'}`);
   console.log(`=============================================\n`);
 
   return {
-    message: 'تم إرسال رمز التحقق بنجاح',
+    message: sendResult.success
+      ? 'تم إرسال رمز التحقق عبر الواتساب'
+      : 'تم إنشاء رمز التحقق (تحقق من السجل)',
     phoneNumber,
+    otpDelivered: sendResult.success
   };
 };
 
 /**
- * Verifies OTP code manually.
+ * Verifies OTP code entered by the user.
  */
 const verifyOTP = async (rawPhone, otpCode) => {
   const phoneNumber = normalizePhoneNumber(rawPhone);
@@ -124,7 +137,7 @@ const verifyOTP = async (rawPhone, otpCode) => {
 };
 
 /**
- * Checks if user has been verified (legacy polling endpoint).
+ * Checks if user has been verified (polling endpoint for WhatsApp bot flow).
  */
 const checkVerificationStatus = async (rawPhone) => {
   const phoneNumber = normalizePhoneNumber(rawPhone);
@@ -149,9 +162,9 @@ const checkVerificationStatus = async (rawPhone) => {
   return { isVerified: false };
 };
 
-/* =========================================================
-   FIREBASE AUTH FLOW (PRIMARY)
-   ========================================================= */
+/* =========================================================================
+   LEGACY: FIREBASE AUTH FLOW (commented out — pivoted to Evolution API)
+   =========================================================================
 const verifyFirebaseToken = async (idToken) => {
   const auth = getAuth();
   if (!auth) {
@@ -201,7 +214,7 @@ const verifyFirebaseToken = async (idToken) => {
       select: { id: true, phoneNumber: true, role: true, isVerified: true, business: true }
     });
 
-    // Generate OUR custom backend JWT (we don't use Firebase tokens for backend requests to keep our roles system intact)
+    // Generate OUR custom backend JWT
     const token = jwt.sign(
       { id: finalUser.id, role: finalUser.role },
       process.env.JWT_SECRET,
@@ -214,10 +227,11 @@ const verifyFirebaseToken = async (idToken) => {
     throw new Error('Invalid or expired Firebase token');
   }
 };
+   ========================================================================= */
 
 module.exports = {
   loginOrRegister,
   verifyOTP,
   checkVerificationStatus,
-  verifyFirebaseToken
+  // verifyFirebaseToken // LEGACY: Firebase auth disabled
 };
