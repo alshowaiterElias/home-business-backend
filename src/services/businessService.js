@@ -53,7 +53,7 @@ const getBusinessById = async (id) => {
       }
     }
   });
-  if (!business) throw new Error('Business not found');
+  if (!business || !business.isActive) throw new Error('Business not found or suspended');
   return business;
 };
 

@@ -5,7 +5,10 @@ const getPublicProducts = async (filters = {}) => {
   
   let whereClause = {
     status: 'APPROVED',
-    isAvailable: true
+    isAvailable: true,
+    business: {
+      isActive: true
+    }
   };
 
   if (featured === 'true' || featured === true) {
@@ -26,7 +29,10 @@ const getPublicProducts = async (filters = {}) => {
   }
 
   if (governorateId) {
-    whereClause.business = { city: { governorateId: governorateId } };
+    whereClause.business = {
+      isActive: true,
+      city: { governorateId: governorateId }
+    };
   }
 
   if (search) {
@@ -106,7 +112,9 @@ const getProductById = async (id) => {
     }
   });
 
-  if (!product) throw new Error('Product not found');
+  if (!product || !product.business || !product.business.isActive) {
+    throw new Error('Product not found or business is suspended');
+  }
   return product;
 };
 
@@ -117,6 +125,10 @@ const createProduct = async (userId, data, imageFiles) => {
   const business = await prisma.business.findUnique({ where: { userId } });
   if (!business) {
     throw new Error('You must create a business profile before uploading products');
+  }
+
+  if (!business.isActive) {
+    throw new Error('حسابك معطل حالياً من قبل الإدارة. لا يمكنك إضافة منتجات جديدة.');
   }
 
   // 1.5 Validate category
