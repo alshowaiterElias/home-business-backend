@@ -25,22 +25,47 @@ const normalizeForWhatsApp = (phone) => {
 
 /**
  * Helper function to safely execute fetch and parse JSON or handle HTML error pages gracefully.
+ * Includes automatic retry for Render free tier cold-starts (429 / 502 / 503 errors).
  */
-const safeFetchJson = async (url, options = {}) => {
-  const response = await fetch(url, options);
-  const contentType = response.headers.get('content-type') || '';
+const safeFetchJson = async (url, options = {}, retries = 1) => {
+  try {
+    const response = await fetch(url, options);
+    const contentType = response.headers.get('content-type') || '';
 
-  if (contentType.includes('application/json')) {
-    const data = await response.json();
-    return { ok: response.ok, status: response.status, data };
-  } else {
+    if (contentType.includes('application/json')) {
+      const data = await response.json();
+      return { ok: response.ok, status: response.status, data };
+    }
+
+    // Handle HTML error pages (e.g. 429 Too Many Requests, 502 Bad Gateway) from Render edge
+    if ((response.status === 429 || response.status === 502 || response.status === 503) && retries > 0) {
+      console.warn(`[Evolution API] Received status ${response.status} from Render. Retrying in 2.5 seconds...`);
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      return safeFetchJson(url, options, retries - 1);
+    }
+
     const text = await response.text();
     console.error(`[Evolution API] Non-JSON HTML response (${response.status}) from ${url}:`, text.substring(0, 300));
+    
+    let userMsg = `خادم Evolution API يعود بالرمز ${response.status}.`;
+    if (response.status === 429) {
+      userMsg = 'تم تجاوز عدد الطلبات المسموح بها مؤقتاً (429 Too Many Requests) على خادم Render المجاني. يرجى الانتظار 30 ثانية والإعادة.';
+    } else if (response.status === 502 || response.status === 503) {
+      userMsg = 'خادم Evolution API قيد التشغيل/الاستيقاظ على Render (502/503). يرجى المحاولة بعد قليل.';
+    }
+
     return {
       ok: false,
       status: response.status,
-      data: { message: `Evolution API returned status ${response.status} (${response.statusText}). Check API URL configuration.` }
+      data: { message: userMsg }
     };
+  } catch (error) {
+    if (retries > 0) {
+      console.warn(`[Evolution API] Request failed (${error.message}). Retrying in 2.5 seconds...`);
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      return safeFetchJson(url, options, retries - 1);
+    }
+    throw error;
   }
 };
 
