@@ -28,6 +28,26 @@ router.use('/notifications', notificationRoutes);
 router.use('/whatsapp', whatsappRoutes);
 router.use('/ai', aiRoutes);
 
+// Public app configuration endpoint
+router.get('/config', async (req, res) => {
+  try {
+    const adminService = require('../services/adminService');
+    const settings = await adminService.getSystemSettings();
+    res.json({
+      success: true,
+      data: {
+        supportPhone: settings.supportPhone,
+        supportEmail: settings.supportEmail,
+        developerPhone: settings.developerPhone,
+        developerEmail: settings.developerEmail,
+        maintenanceMode: settings.maintenanceMode
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // API Health check route (verifies DB connectivity)
 router.get('/health', async (req, res) => {
   try {

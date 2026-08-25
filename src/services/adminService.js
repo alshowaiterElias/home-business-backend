@@ -336,13 +336,21 @@ const getSystemSettings = async () => {
     maxFeaturedProducts: 10,
     maxFeaturedBusinesses: 10,
     autoApproveProducts: false,
-    maintenanceMode: false
+    maintenanceMode: false,
+    supportPhone: '+967772546343',
+    supportEmail: 'alshowaiterelias@gmail.com',
+    developerPhone: '+967772546343',
+    developerEmail: 'alshowaiterelias@gmail.com'
   };
   for (const s of settings) {
     if (s.key === 'MAX_FEATURED_PRODUCTS') map.maxFeaturedProducts = parseInt(s.value, 10) || 10;
     if (s.key === 'MAX_FEATURED_BUSINESSES') map.maxFeaturedBusinesses = parseInt(s.value, 10) || 10;
     if (s.key === 'AUTO_APPROVE_PRODUCTS') map.autoApproveProducts = s.value === 'true';
     if (s.key === 'MAINTENANCE_MODE') map.maintenanceMode = s.value === 'true';
+    if (s.key === 'SUPPORT_PHONE') map.supportPhone = s.value;
+    if (s.key === 'SUPPORT_EMAIL') map.supportEmail = s.value;
+    if (s.key === 'DEV_PHONE') map.developerPhone = s.value;
+    if (s.key === 'DEV_EMAIL') map.developerEmail = s.value;
   }
   return map;
 };
@@ -378,6 +386,34 @@ const updateSystemSettings = async (adminId, data) => {
       where: { key: 'MAINTENANCE_MODE' },
       update: { value: String(data.maintenanceMode) },
       create: { key: 'MAINTENANCE_MODE', value: String(data.maintenanceMode) }
+    }));
+  }
+  if (data.supportPhone !== undefined) {
+    updates.push(prisma.systemSetting.upsert({
+      where: { key: 'SUPPORT_PHONE' },
+      update: { value: String(data.supportPhone) },
+      create: { key: 'SUPPORT_PHONE', value: String(data.supportPhone) }
+    }));
+  }
+  if (data.supportEmail !== undefined) {
+    updates.push(prisma.systemSetting.upsert({
+      where: { key: 'SUPPORT_EMAIL' },
+      update: { value: String(data.supportEmail) },
+      create: { key: 'SUPPORT_EMAIL', value: String(data.supportEmail) }
+    }));
+  }
+  if (data.developerPhone !== undefined) {
+    updates.push(prisma.systemSetting.upsert({
+      where: { key: 'DEV_PHONE' },
+      update: { value: String(data.developerPhone) },
+      create: { key: 'DEV_PHONE', value: String(data.developerPhone) }
+    }));
+  }
+  if (data.developerEmail !== undefined) {
+    updates.push(prisma.systemSetting.upsert({
+      where: { key: 'DEV_EMAIL' },
+      update: { value: String(data.developerEmail) },
+      create: { key: 'DEV_EMAIL', value: String(data.developerEmail) }
     }));
   }
 
