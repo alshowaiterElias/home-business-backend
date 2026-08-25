@@ -248,6 +248,52 @@ const sendWhatsAppTestMessage = async (req, res, next) => {
   }
 };
 
+const getSettings = async (req, res, next) => {
+  try {
+    const settings = await adminService.getSystemSettings();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateSettings = async (req, res, next) => {
+  try {
+    const settings = await adminService.updateSystemSettings(req.user.id, req.body);
+    res.json({ success: true, data: settings, message: 'تم تحديث إعدادات النظام بنجاح ✨' });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+const toggleProductFeatured = async (req, res, next) => {
+  try {
+    const { isFeatured } = req.body;
+    const product = await adminService.toggleProductFeatured(req.user.id, req.params.id, Boolean(isFeatured));
+    res.json({
+      success: true,
+      data: product,
+      message: isFeatured ? 'تم تمييز المنتج بنجاح في الصفحة الرئيسية ⭐' : 'تم إلغاء تمييز المنتج'
+    });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+const toggleBusinessFeatured = async (req, res, next) => {
+  try {
+    const { isFeatured } = req.body;
+    const business = await adminService.toggleBusinessFeatured(req.user.id, req.params.id, Boolean(isFeatured));
+    res.json({
+      success: true,
+      data: business,
+      message: isFeatured ? 'تم تمييز المتجر بنجاح في الصفحة الرئيسية ⭐' : 'تم إلغاء تمييز المتجر'
+    });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getDashboardStats,
   getPendingProducts,
@@ -272,6 +318,9 @@ module.exports = {
   getWhatsAppPairingCode,
   createWhatsAppInstance,
   deleteWhatsAppInstance,
-  sendWhatsAppTestMessage
+  sendWhatsAppTestMessage,
+  getSettings,
+  updateSettings,
+  toggleProductFeatured,
+  toggleBusinessFeatured
 };
-

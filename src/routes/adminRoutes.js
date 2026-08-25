@@ -14,6 +14,7 @@ router.get('/products/pending', adminController.getPendingProducts);
 router.get('/products', adminController.getAllProducts);
 router.put('/products/:id/approve', adminController.approveProduct);
 router.put('/products/:id/reject', adminController.rejectProduct);
+router.patch('/products/:id/featured', adminController.toggleProductFeatured);
 router.delete('/products/:id', adminController.deleteProduct);
 
 // Users Management
@@ -24,6 +25,7 @@ router.delete('/users/:id', adminController.deleteUser);
 // Businesses / Stores Management
 router.get('/businesses', adminController.getAllBusinesses);
 router.put('/businesses/:id/status', adminController.toggleBusinessStatus);
+router.patch('/businesses/:id/featured', adminController.toggleBusinessFeatured);
 
 // Review Moderation
 router.get('/reviews', adminController.getAllReviews);
@@ -32,6 +34,10 @@ router.delete('/reviews/:id', adminController.deleteReview);
 // Reports Management
 router.get('/reports', adminController.getReports);
 router.put('/reports/:id/resolve', adminController.resolveReport);
+
+// System Settings
+router.get('/settings', adminController.getSettings);
+router.patch('/settings', adminController.updateSettings);
 
 // Audit Logs
 router.get('/audit-logs', adminController.getAuditLogs);

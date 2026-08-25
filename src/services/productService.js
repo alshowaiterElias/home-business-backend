@@ -1,12 +1,16 @@
 const prisma = require('../config/db');
 
-const getPublicProducts = async (filters) => {
-  const { categoryId, governorateId, search, minPrice, maxPrice, minRating, limit = 50, page = 1 } = filters;
+const getPublicProducts = async (filters = {}) => {
+  const { categoryId, governorateId, search, minPrice, maxPrice, minRating, featured, limit = 50, page = 1 } = filters;
   
   let whereClause = {
     status: 'APPROVED',
     isAvailable: true
   };
+
+  if (featured === 'true' || featured === true) {
+    whereClause.isFeatured = true;
+  }
 
   if (categoryId) {
     const category = await prisma.category.findUnique({
@@ -42,7 +46,7 @@ const getPublicProducts = async (filters) => {
   const take = parseInt(limit, 10);
   const skip = (parseInt(page, 10) - 1) * take;
 
-  return await prisma.product.findMany({
+  let products = await prisma.product.findMany({
     where: whereClause,
     take: take,
     skip: skip,
@@ -57,6 +61,31 @@ const getPublicProducts = async (filters) => {
     },
     orderBy: { createdAt: 'desc' }
   });
+
+  // Fallback: If featured filter was requested but no featured products exist in DB, fallback to top products
+  if ((featured === 'true' || featured === true) && products.length === 0) {
+    delete whereClause.isFeatured;
+    products = await prisma.product.findMany({
+      where: whereClause,
+      take: take,
+      skip: skip,
+      include: {
+        business: {
+          include: { city: true }
+        },
+        images: {
+          orderBy: { sortOrder: 'asc' }
+        },
+        category: true
+      },
+      orderBy: [
+        { averageRating: 'desc' },
+        { createdAt: 'desc' }
+      ]
+    });
+  }
+
+  return products;
 };
 
 const getProductById = async (id) => {

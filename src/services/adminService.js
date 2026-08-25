@@ -319,6 +319,152 @@ const getBroadcastHistory = async () => {
   });
 };
 
+/**
+ * Helper to get setting value by key with fallback
+ */
+const getSettingValue = async (key, defaultValue = '10') => {
+  const setting = await prisma.systemSetting.findUnique({ where: { key } });
+  return setting ? setting.value : defaultValue;
+};
+
+/**
+ * Get all system settings as key-value map
+ */
+const getSystemSettings = async () => {
+  const settings = await prisma.systemSetting.findMany();
+  const map = {
+    maxFeaturedProducts: 10,
+    maxFeaturedBusinesses: 10,
+    autoApproveProducts: false,
+    maintenanceMode: false
+  };
+  for (const s of settings) {
+    if (s.key === 'MAX_FEATURED_PRODUCTS') map.maxFeaturedProducts = parseInt(s.value, 10) || 10;
+    if (s.key === 'MAX_FEATURED_BUSINESSES') map.maxFeaturedBusinesses = parseInt(s.value, 10) || 10;
+    if (s.key === 'AUTO_APPROVE_PRODUCTS') map.autoApproveProducts = s.value === 'true';
+    if (s.key === 'MAINTENANCE_MODE') map.maintenanceMode = s.value === 'true';
+  }
+  return map;
+};
+
+/**
+ * Update system settings
+ */
+const updateSystemSettings = async (adminId, data) => {
+  const updates = [];
+  if (data.maxFeaturedProducts !== undefined) {
+    updates.push(prisma.systemSetting.upsert({
+      where: { key: 'MAX_FEATURED_PRODUCTS' },
+      update: { value: String(data.maxFeaturedProducts) },
+      create: { key: 'MAX_FEATURED_PRODUCTS', value: String(data.maxFeaturedProducts) }
+    }));
+  }
+  if (data.maxFeaturedBusinesses !== undefined) {
+    updates.push(prisma.systemSetting.upsert({
+      where: { key: 'MAX_FEATURED_BUSINESSES' },
+      update: { value: String(data.maxFeaturedBusinesses) },
+      create: { key: 'MAX_FEATURED_BUSINESSES', value: String(data.maxFeaturedBusinesses) }
+    }));
+  }
+  if (data.autoApproveProducts !== undefined) {
+    updates.push(prisma.systemSetting.upsert({
+      where: { key: 'AUTO_APPROVE_PRODUCTS' },
+      update: { value: String(data.autoApproveProducts) },
+      create: { key: 'AUTO_APPROVE_PRODUCTS', value: String(data.autoApproveProducts) }
+    }));
+  }
+  if (data.maintenanceMode !== undefined) {
+    updates.push(prisma.systemSetting.upsert({
+      where: { key: 'MAINTENANCE_MODE' },
+      update: { value: String(data.maintenanceMode) },
+      create: { key: 'MAINTENANCE_MODE', value: String(data.maintenanceMode) }
+    }));
+  }
+
+  if (updates.length > 0) {
+    await prisma.$transaction(updates);
+
+    await prisma.adminAuditLog.create({
+      data: {
+        adminId,
+        action: 'UPDATE_SYSTEM_SETTINGS',
+        targetId: 'SYSTEM',
+        details: data
+      }
+    });
+  }
+
+  return await getSystemSettings();
+};
+
+/**
+ * Toggle product featured status with limit check
+ */
+const toggleProductFeatured = async (adminId, productId, isFeatured) => {
+  if (isFeatured) {
+    const maxLimitStr = await getSettingValue('MAX_FEATURED_PRODUCTS', '10');
+    const maxLimit = parseInt(maxLimitStr, 10) || 10;
+
+    const currentCount = await prisma.product.count({
+      where: { isFeatured: true, status: 'APPROVED' }
+    });
+
+    if (currentCount >= maxLimit) {
+      throw new Error(`لقد وصلت إلى الحد الأقصى للمنتجات المميزة (${maxLimit} منتجات). يمكنك زيادة الحد من صفحة الإعدادات أو إلغاء تمييز منتج آخر.`);
+    }
+  }
+
+  const product = await prisma.product.update({
+    where: { id: productId },
+    data: { isFeatured: Boolean(isFeatured) }
+  });
+
+  await prisma.adminAuditLog.create({
+    data: {
+      adminId,
+      action: isFeatured ? 'FEATURE_PRODUCT' : 'UNFEATURE_PRODUCT',
+      targetId: productId,
+      details: { title: product.title }
+    }
+  });
+
+  return product;
+};
+
+/**
+ * Toggle business featured status with limit check
+ */
+const toggleBusinessFeatured = async (adminId, businessId, isFeatured) => {
+  if (isFeatured) {
+    const maxLimitStr = await getSettingValue('MAX_FEATURED_BUSINESSES', '10');
+    const maxLimit = parseInt(maxLimitStr, 10) || 10;
+
+    const currentCount = await prisma.business.count({
+      where: { isFeatured: true, isActive: true }
+    });
+
+    if (currentCount >= maxLimit) {
+      throw new Error(`لقد وصلت إلى الحد الأقصى للمتاجر المميزة (${maxLimit} متاجر). يمكنك زيادة الحد من صفحة الإعدادات أو إلغاء تمييز متجر آخر.`);
+    }
+  }
+
+  const business = await prisma.business.update({
+    where: { id: businessId },
+    data: { isFeatured: Boolean(isFeatured) }
+  });
+
+  await prisma.adminAuditLog.create({
+    data: {
+      adminId,
+      action: isFeatured ? 'FEATURE_BUSINESS' : 'UNFEATURE_BUSINESS',
+      targetId: businessId,
+      details: { businessName: business.businessName }
+    }
+  });
+
+  return business;
+};
+
 module.exports = {
   getDashboardStats,
   getPendingProducts,
@@ -336,5 +482,10 @@ module.exports = {
   resolveReport,
   getAuditLogs,
   broadcastPushNotification,
-  getBroadcastHistory
+  getBroadcastHistory,
+  getSystemSettings,
+  updateSystemSettings,
+  toggleProductFeatured,
+  toggleBusinessFeatured,
+  getSettingValue
 };

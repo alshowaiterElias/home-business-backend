@@ -43,6 +43,7 @@ model Business {
   addressDetails String    @db.Text @map("address_details")
   logoUrl        String?   @map("logo_url") @db.Text
   isActive       Boolean   @default(true) @map("is_active")
+  isFeatured     Boolean   @default(false) @map("is_featured")
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
@@ -51,6 +52,7 @@ model Business {
   products       Product[]
 
   @@index([cityId])
+  @@index([isFeatured])
   @@map("businesses")
 }
 
@@ -100,6 +102,7 @@ model Product {
   status          ProductStatus  @default(PENDING)
   rejectionReason String?        @db.Text @map("rejection_reason")
   isAvailable     Boolean        @default(true) @map("is_available")
+  isFeatured      Boolean        @default(false) @map("is_featured")
   averageRating   Decimal        @default(0.0) @db.Decimal(3, 2) @map("average_rating")
   reviewsCount    Int            @default(0) @map("reviews_count")
   createdAt       DateTime       @default(now()) @map("created_at")
@@ -113,6 +116,7 @@ model Product {
 
   @@index([businessId])
   @@index([status, categoryId])
+  @@index([isFeatured])
   @@map("products")
 }
 
@@ -251,3 +255,13 @@ model WhatsAppTemplate {
 
   @@map("whatsapp_templates")
 }
+
+model SystemSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+}
+

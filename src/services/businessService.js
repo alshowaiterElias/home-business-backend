@@ -72,8 +72,12 @@ const getBusinessByUserId = async (userId) => {
 };
 
 const getAllBusinesses = async (filters) => {
-  const { governorateId, search, limit = 50, page = 1 } = filters || {};
+  const { governorateId, search, featured, limit = 50, page = 1 } = filters || {};
   let whereClause = { isActive: true };
+
+  if (featured === 'true' || featured === true) {
+    whereClause.isFeatured = true;
+  }
 
   if (governorateId) {
     whereClause.city = { governorateId: governorateId };
@@ -86,7 +90,7 @@ const getAllBusinesses = async (filters) => {
   const take = parseInt(limit, 10);
   const skip = (parseInt(page, 10) - 1) * take;
 
-  return await prisma.business.findMany({
+  let businesses = await prisma.business.findMany({
     where: whereClause,
     take: take,
     skip: skip,
@@ -94,11 +98,31 @@ const getAllBusinesses = async (filters) => {
       city: { include: { governorate: true } },
       products: {
         where: { status: 'APPROVED', isAvailable: true },
-        select: { id: true, averageRating: true, reviewsCount: true } // Need this for calculating store rating easily
+        select: { id: true, averageRating: true, reviewsCount: true }
       }
     },
     orderBy: { createdAt: 'desc' }
   });
+
+  // Fallback: If featured filter was requested but no featured businesses exist in DB, fallback to top active businesses
+  if ((featured === 'true' || featured === true) && businesses.length === 0) {
+    delete whereClause.isFeatured;
+    businesses = await prisma.business.findMany({
+      where: whereClause,
+      take: take,
+      skip: skip,
+      include: {
+        city: { include: { governorate: true } },
+        products: {
+          where: { status: 'APPROVED', isAvailable: true },
+          select: { id: true, averageRating: true, reviewsCount: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  return businesses;
 };
 
 module.exports = { createOrUpdateBusiness, getBusinessById, getBusinessByUserId, getAllBusinesses };
