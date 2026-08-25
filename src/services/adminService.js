@@ -220,7 +220,13 @@ const getAllReviews = async () => {
   return await prisma.productReview.findMany({
     include: {
       user: { select: { id: true, phoneNumber: true } },
-      product: { select: { id: true, title: true } }
+      product: {
+        include: {
+          images: true,
+          category: { select: { id: true, nameAr: true } },
+          business: { select: { id: true, businessName: true, contactPhone: true } }
+        }
+      }
     },
     orderBy: { createdAt: 'desc' }
   });

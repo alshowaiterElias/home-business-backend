@@ -28,8 +28,28 @@ const markAllAsRead = async (req, res) => {
   }
 };
 
+const deleteNotification = async (req, res) => {
+  try {
+    await notificationService.deleteNotification(req.params.id, req.user.id);
+    res.json({ success: true, message: 'Notification deleted' });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+const deleteAllNotifications = async (req, res) => {
+  try {
+    await notificationService.deleteAllNotifications(req.user.id);
+    res.json({ success: true, message: 'All notifications deleted' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getUserNotifications,
   markAsRead,
-  markAllAsRead
+  markAllAsRead,
+  deleteNotification,
+  deleteAllNotifications
 };

@@ -42,9 +42,25 @@ const markAllAsRead = async (userId) => {
   });
 };
 
+const deleteNotification = async (id, userId) => {
+  const notification = await prisma.notification.findUnique({ where: { id } });
+  if (!notification) throw new Error('Notification not found');
+  if (notification.userId !== userId) throw new Error('Unauthorized');
+
+  return await prisma.notification.delete({ where: { id } });
+};
+
+const deleteAllNotifications = async (userId) => {
+  return await prisma.notification.deleteMany({
+    where: { userId }
+  });
+};
+
 module.exports = {
   getUserNotifications,
   createNotification,
   markAsRead,
-  markAllAsRead
+  markAllAsRead,
+  deleteNotification,
+  deleteAllNotifications
 };
