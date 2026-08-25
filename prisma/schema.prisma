@@ -124,6 +124,7 @@ enum ProductStatus {
   PENDING
   APPROVED
   REJECTED
+  SUSPENDED
 }
 
 model ProductImage {
@@ -242,6 +243,7 @@ model Notification {
 enum NotificationType {
   PRODUCT_APPROVED
   PRODUCT_REJECTED
+  PRODUCT_SUSPENDED
   NEW_REVIEW
   SYSTEM_ALERT
 }

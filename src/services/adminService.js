@@ -91,18 +91,27 @@ const getAllProducts = async ({ status, categoryId, search }) => {
 const fcmService = require('./fcmService');
 
 const updateProductStatus = async (adminId, productId, status, rejectionReason = null) => {
+  const updateData = {
+    status,
+    rejectionReason: status === 'REJECTED' ? rejectionReason : null
+  };
+  if (status === 'SUSPENDED') {
+    updateData.isFeatured = false;
+  }
+
   const product = await prisma.product.update({
     where: { id: productId },
-    data: {
-      status,
-      rejectionReason: status === 'REJECTED' ? rejectionReason : null
-    }
+    data: updateData
   });
+
+  let action = 'APPROVE_PRODUCT';
+  if (status === 'REJECTED') action = 'REJECT_PRODUCT';
+  if (status === 'SUSPENDED') action = 'SUSPEND_PRODUCT';
 
   await prisma.adminAuditLog.create({
     data: {
       adminId,
-      action: status === 'APPROVED' ? 'APPROVE_PRODUCT' : 'REJECT_PRODUCT',
+      action,
       targetId: productId,
       details: { rejectionReason }
     }
@@ -121,6 +130,11 @@ const updateProductStatus = async (adminId, productId, status, rejectionReason =
       const body = `تم رفض "${product.title}" — السبب: ${rejectionReason}`;
       await notificationService.createNotification(business.userId, title, body, 'PRODUCT_REJECTED');
       await fcmService.sendToUser(business.userId, title, body, { type: 'PRODUCT_REJECTED', productId, rejectionReason });
+    } else if (status === 'SUSPENDED') {
+      const title = 'تم توقيف المنتج ⚠️';
+      const body = `تم توقيف منتجك "${product.title}" من قبل إدارة المنصة. يرجى التواصل مع الدعم لمزيد من المعلومات.`;
+      await notificationService.createNotification(business.userId, title, body, 'PRODUCT_SUSPENDED');
+      await fcmService.sendToUser(business.userId, title, body, { type: 'PRODUCT_SUSPENDED', productId });
     }
   }
 

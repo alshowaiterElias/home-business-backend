@@ -48,6 +48,15 @@ const rejectProduct = async (req, res, next) => {
   }
 };
 
+const suspendProduct = async (req, res, next) => {
+  try {
+    const product = await adminService.updateProductStatus(req.user.id, req.params.id, 'SUSPENDED');
+    res.json({ success: true, data: product, message: 'Product suspended successfully' });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 const deleteProduct = async (req, res, next) => {
   try {
     await adminService.deleteProductByAdmin(req.user.id, req.params.id);
@@ -300,6 +309,7 @@ module.exports = {
   getAllProducts,
   approveProduct,
   rejectProduct,
+  suspendProduct,
   deleteProduct,
   getAllUsers,
   updateUserRole,
