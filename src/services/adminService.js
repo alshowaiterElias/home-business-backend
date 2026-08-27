@@ -67,7 +67,7 @@ const getPendingProducts = async () => {
 };
 
 const getAllProducts = async ({ status, categoryId, search }) => {
-  const where = {};
+  const where = { deletedAt: null };
   if (status) where.status = status;
   if (categoryId) where.categoryId = categoryId;
   if (search) {
@@ -142,7 +142,49 @@ const updateProductStatus = async (adminId, productId, status, rejectionReason =
 };
 
 const deleteProductByAdmin = async (adminId, productId) => {
-  const product = await prisma.product.delete({ where: { id: productId } });
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    include: {
+      _count: { select: { reviews: true } }
+    }
+  });
+
+  if (!product) {
+    const error = new Error('المنتج غير موجود');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // Check if product is referenced in reviews or reports
+  const reportsCount = await prisma.report.count({
+    where: { targetType: 'PRODUCT', targetId: productId }
+  });
+
+  if (product._count.reviews > 0 || reportsCount > 0) {
+    // Soft delete / suspend product to preserve review & audit history
+    await prisma.product.update({
+      where: { id: productId },
+      data: {
+        status: 'SUSPENDED',
+        isAvailable: false,
+        deletedAt: new Date()
+      }
+    });
+
+    await prisma.adminAuditLog.create({
+      data: {
+        adminId,
+        action: 'SOFT_DELETE_PRODUCT',
+        targetId: productId,
+        details: { title: product.title, reason: 'تمت أرشفته وتوقيفه لوجود تقييمات/بلاغات سابقة' }
+      }
+    });
+
+    return { ...product, isSoftDeleted: true };
+  }
+
+  // Pure product without history can be safely hard deleted
+  const deletedProduct = await prisma.product.delete({ where: { id: productId } });
 
   await prisma.adminAuditLog.create({
     data: {
@@ -153,11 +195,12 @@ const deleteProductByAdmin = async (adminId, productId) => {
     }
   });
 
-  return product;
+  return deletedProduct;
 };
 
 const getAllUsers = async () => {
   return await prisma.user.findMany({
+    where: { deletedAt: null },
     include: {
       business: {
         include: { city: { include: { governorate: true } } }
@@ -187,22 +230,64 @@ const updateUserRole = async (adminId, userId, role) => {
 };
 
 const deleteUser = async (adminId, userId) => {
-  const user = await prisma.user.delete({ where: { id: userId } });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { business: true }
+  });
+
+  if (!user) {
+    const error = new Error('المستخدم غير موجود');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (user.role === 'ADMIN') {
+    const error = new Error('لا يمكن حذف حساب مشرف/أدمن النظام الرئيسية.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // Soft delete user and attached business
+  if (user.business) {
+    await prisma.business.update({
+      where: { id: user.business.id },
+      data: { isActive: false, deletedAt: new Date() }
+    });
+
+    await prisma.product.updateMany({
+      where: { businessId: user.business.id },
+      data: { status: 'SUSPENDED', isAvailable: false, deletedAt: new Date() }
+    });
+  }
+
+  // Remove push tokens
+  await prisma.deviceToken.deleteMany({ where: { userId } });
+
+  const anonymizedPhone = `DELETED_${user.id.slice(0, 8)}_${Date.now()}`;
+  const updatedUser = await prisma.user.update({
+    where: { id: userId },
+    data: {
+      isVerified: false,
+      phoneNumber: anonymizedPhone,
+      deletedAt: new Date()
+    }
+  });
 
   await prisma.adminAuditLog.create({
     data: {
       adminId,
-      action: 'DELETE_USER',
+      action: 'SOFT_DELETE_USER',
       targetId: userId,
-      details: { phoneNumber: user.phoneNumber }
+      details: { originalPhone: user.phoneNumber }
     }
   });
 
-  return user;
+  return updatedUser;
 };
 
 const getAllBusinesses = async () => {
   return await prisma.business.findMany({
+    where: { deletedAt: null },
     include: {
       user: { select: { id: true, phoneNumber: true, role: true, createdAt: true } },
       city: { include: { governorate: true } },

@@ -14,6 +14,7 @@ model User {
   otpCode          String?           @map("otp_code")
   otpExpiresAt     DateTime?         @map("otp_expires_at")
   role             Role              @default(USER)
+  deletedAt        DateTime?         @map("deleted_at")
   createdAt        DateTime          @default(now()) @map("created_at")
   updatedAt        DateTime          @updatedAt @map("updated_at")
 
@@ -44,11 +45,12 @@ model Business {
   logoUrl        String?   @map("logo_url") @db.Text
   isActive       Boolean   @default(true) @map("is_active")
   isFeatured     Boolean   @default(false) @map("is_featured")
+  deletedAt      DateTime? @map("deleted_at")
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  city           City      @relation(fields: [cityId], references: [id])
+  user           User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  city           City      @relation(fields: [cityId], references: [id], onDelete: Restrict)
   products       Product[]
 
   @@index([cityId])
@@ -69,7 +71,7 @@ model City {
   governorateId  String      @map("governorate_id")
   nameAr         String      @map("name_ar")
   
-  governorate    Governorate @relation(fields: [governorateId], references: [id], onDelete: Cascade)
+  governorate    Governorate @relation(fields: [governorateId], references: [id], onDelete: Restrict)
   businesses     Business[]
 
   @@map("cities")
@@ -105,11 +107,12 @@ model Product {
   isFeatured      Boolean        @default(false) @map("is_featured")
   averageRating   Decimal        @default(0.0) @db.Decimal(3, 2) @map("average_rating")
   reviewsCount    Int            @default(0) @map("reviews_count")
+  deletedAt       DateTime?      @map("deleted_at")
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
 
-  business        Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  category        Category       @relation(fields: [categoryId], references: [id])
+  business        Business       @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  category        Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   images          ProductImage[]
   reviews         ProductReview[]
   favoritedBy     FavoriteProduct[]
@@ -170,14 +173,14 @@ model FavoriteProduct {
 
 model Report {
   id          String       @id @default(uuid())
-  reporterId  String       @map("reporter_id")
+  reporterId  String?      @map("reporter_id")
   targetType  ReportTarget @map("target_type")
   targetId    String       @map("target_id")
   reason      String       @db.Text
   status      ReportStatus @default(PENDING)
   createdAt   DateTime     @default(now()) @map("created_at")
 
-  reporter    User         @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  reporter    User?        @relation(fields: [reporterId], references: [id], onDelete: SetNull)
 
   @@map("reports")
 }
@@ -214,13 +217,13 @@ enum DevicePlatform {
 
 model AdminAuditLog {
   id        String   @id @default(uuid())
-  adminId   String   @map("admin_id")
+  adminId   String?  @map("admin_id")
   action    String
   targetId  String   @map("target_id")
   details   Json?
   createdAt DateTime @default(now()) @map("created_at")
 
-  admin     User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  admin     User?    @relation(fields: [adminId], references: [id], onDelete: SetNull)
 
   @@map("admin_audit_logs")
 }

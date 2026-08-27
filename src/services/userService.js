@@ -45,38 +45,43 @@ const requestAccountDeletion = async (userId, reason = '') => {
     include: { business: true }
   });
 
-  if (!user) {
-    throw new Error('المستخدم غير موجود');
+  if (!user || user.deletedAt) {
+    throw new Error('المستخدم غير موجود أو تم حذفه سابقاً');
   }
 
   if (user.role === 'ADMIN') {
     throw new Error('لا يمكن حذف حساب المسؤول الرئيسي عبر التطبيق');
   }
 
-  // If user owns a business, deactivate business & products first
+  // If user owns a business, soft delete business & suspend products
   if (user.business) {
     await prisma.business.update({
       where: { id: user.business.id },
-      data: { isActive: false }
+      data: { isActive: false, deletedAt: new Date() }
     });
 
     await prisma.product.updateMany({
       where: { businessId: user.business.id },
-      data: { status: 'REJECTED', rejectionReason: 'تم توقيف المنتج بسبب حذف حساب التاجر' }
+      data: { status: 'SUSPENDED', isAvailable: false, deletedAt: new Date(), rejectionReason: 'تم توقيف المنتج بسبب حذف حساب التاجر' }
     });
   }
 
-  // Delete device tokens & user account
+  // Delete device tokens
   await prisma.deviceToken.deleteMany({ where: { userId } });
-  
-  const deletedUser = await prisma.user.delete({
-    where: { id: userId }
+
+  const anonymizedPhone = `DELETED_${user.id.slice(0, 8)}_${Date.now()}`;
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      isVerified: false,
+      phoneNumber: anonymizedPhone,
+      deletedAt: new Date()
+    }
   });
 
   return {
     deleted: true,
-    phoneNumber: deletedUser.phoneNumber,
-    message: 'تم حذف حسابك وجميع بياناتك المتعلقة بنجاح'
+    message: 'تم حذف حسابك وإلغاء تنشيط جميع بياناتك بنجاح'
   };
 };
 

@@ -158,9 +158,27 @@ const createUnitOfSale = async (nameAr, sortOrder = 0) => {
 };
 
 const deleteUnitOfSale = async (id) => {
-  return await prisma.unitOfSale.delete({
-    where: { id }
+  const unit = await prisma.unitOfSale.findUnique({ where: { id } });
+  if (!unit) {
+    const error = new Error('وحدة البيع غير موجودة');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // Count products using this unit of sale string
+  const productsCount = await prisma.product.count({
+    where: { unitOfSale: unit.nameAr, deletedAt: null }
   });
+
+  if (productsCount > 0) {
+    const error = new Error(
+      `لا يمكن حذف وحدة البيع "${unit.nameAr}" لأن هناك (${productsCount}) منتج تباع بهذه الوحدة حالياً في التطبيق.`
+    );
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return await prisma.unitOfSale.delete({ where: { id } });
 };
 
 module.exports = {
