@@ -267,3 +267,13 @@ model SystemSetting {
   @@map("system_settings")
 }
 
+model UnitOfSale {
+  id        String   @id @default(uuid())
+  nameAr    String   @unique @map("name_ar")
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("units_of_sale")
+}
+

@@ -1,13 +1,14 @@
 const { getBucket } = require('../config/firebase');
 const crypto = require('crypto');
+const sharp = require('sharp');
 
 /**
- * Uploads a file buffer directly to Firebase Cloud Storage
+ * Uploads a file buffer directly to Firebase Cloud Storage with automated Sharp WebP compression
  * @param {Buffer} buffer - File buffer from multer memoryStorage
- * @param {string} originalName - Original filename to extract extension
- * @param {string} mimeType - File MIME type (e.g. image/jpeg)
+ * @param {string} originalName - Original filename
+ * @param {string} mimeType - File MIME type (e.g. image/jpeg, image/png)
  * @param {string} folder - Target folder in bucket (e.g. 'products', 'businesses', 'users')
- * @returns {Promise<string>} Public HTTPS URL of the uploaded image
+ * @returns {Promise<string>} Public HTTPS URL of the uploaded optimized image
  */
 async function uploadToFirebase(buffer, originalName, mimeType, folder = 'uploads') {
   const bucket = getBucket();
@@ -15,15 +16,35 @@ async function uploadToFirebase(buffer, originalName, mimeType, folder = 'upload
     throw new Error('Firebase Storage is not initialized. Check your Firebase service account key.');
   }
 
-  const ext = originalName.includes('.') ? originalName.split('.').pop() : 'jpg';
+  let finalBuffer = buffer;
+  let finalMimeType = mimeType;
+  let ext = originalName.includes('.') ? originalName.split('.').pop().toLowerCase() : 'jpg';
+
+  // Perform server-side image compression & WebP conversion for all images
+  if (mimeType && mimeType.startsWith('image/')) {
+    try {
+      finalBuffer = await sharp(buffer)
+        .resize(1200, 1200, {
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .webp({ quality: 80 })
+        .toBuffer();
+
+      finalMimeType = 'image/webp';
+      ext = 'webp';
+    } catch (sharpErr) {
+      console.warn(`⚠️ Sharp image compression failed, falling back to original buffer: ${sharpErr.message}`);
+    }
+  }
+
   const fileName = `${folder}/${crypto.randomUUID()}.${ext}`;
   const file = bucket.file(fileName);
-
   const downloadToken = crypto.randomUUID();
 
-  await file.save(buffer, {
+  await file.save(finalBuffer, {
     metadata: {
-      contentType: mimeType,
+      contentType: finalMimeType,
       metadata: {
         firebaseStorageDownloadTokens: downloadToken,
       },

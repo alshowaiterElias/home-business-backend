@@ -144,6 +144,25 @@ const deleteCity = async (id) => {
   return await prisma.city.delete({ where: { id } });
 };
 
+const getUnitsOfSale = async () => {
+  return await prisma.unitOfSale.findMany({
+    where: { isActive: true },
+    orderBy: [{ sortOrder: 'asc' }, { nameAr: 'asc' }]
+  });
+};
+
+const createUnitOfSale = async (nameAr, sortOrder = 0) => {
+  return await prisma.unitOfSale.create({
+    data: { nameAr, sortOrder }
+  });
+};
+
+const deleteUnitOfSale = async (id) => {
+  return await prisma.unitOfSale.delete({
+    where: { id }
+  });
+};
+
 module.exports = {
   getGovernoratesAndCities,
   getCategories,
@@ -152,5 +171,8 @@ module.exports = {
   createGovernorate,
   deleteGovernorate,
   createCity,
-  deleteCity
+  deleteCity,
+  getUnitsOfSale,
+  createUnitOfSale,
+  deleteUnitOfSale
 };

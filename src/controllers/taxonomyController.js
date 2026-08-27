@@ -84,6 +84,37 @@ const deleteCity = async (req, res, next) => {
   }
 };
 
+const getUnits = async (req, res, next) => {
+  try {
+    const units = await taxonomyService.getUnitsOfSale();
+    res.json({ success: true, data: units });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const createUnit = async (req, res, next) => {
+  try {
+    const { nameAr, sortOrder } = req.body;
+    if (!nameAr) {
+      return res.status(400).json({ success: false, message: 'اسم وحدة البيع مطلوب' });
+    }
+    const unit = await taxonomyService.createUnitOfSale(nameAr, sortOrder);
+    res.status(201).json({ success: true, data: unit });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteUnit = async (req, res, next) => {
+  try {
+    await taxonomyService.deleteUnitOfSale(req.params.id);
+    res.json({ success: true, message: 'تم حذف وحدة البيع بنجاح' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getLocations,
   getCategories,
@@ -92,5 +123,8 @@ module.exports = {
   createGovernorate,
   deleteGovernorate,
   createCity,
-  deleteCity
+  deleteCity,
+  getUnits,
+  createUnit,
+  deleteUnit
 };

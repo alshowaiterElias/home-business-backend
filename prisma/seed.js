@@ -18,10 +18,34 @@ async function main() {
   await prisma.business.deleteMany();
   await prisma.city.deleteMany();
   await prisma.governorate.deleteMany();
+  await prisma.unitOfSale.deleteMany();
   await prisma.whatsAppTemplate.deleteMany();
   await prisma.user.deleteMany();
 
   console.log('✅ Cleanup completed.');
+
+  // Seed Units of Sale (Admin controlled units)
+  console.log('📏 Seeding Units of Sale...');
+  const initialUnits = [
+    { nameAr: 'حبة', sortOrder: 1 },
+    { nameAr: 'قطعة', sortOrder: 2 },
+    { nameAr: 'كيلو', sortOrder: 3 },
+    { nameAr: 'نصف كيلو', sortOrder: 4 },
+    { nameAr: 'جرام', sortOrder: 5 },
+    { nameAr: 'لتر', sortOrder: 6 },
+    { nameAr: 'درزن', sortOrder: 7 },
+    { nameAr: 'طقم', sortOrder: 8 },
+    { nameAr: 'علبة', sortOrder: 9 },
+    { nameAr: 'طبق', sortOrder: 10 },
+    { nameAr: 'قالب', sortOrder: 11 },
+    { nameAr: 'قرص', sortOrder: 12 },
+    { nameAr: 'كرتون', sortOrder: 13 },
+    { nameAr: 'مجموعة', sortOrder: 14 }
+  ];
+  for (const unit of initialUnits) {
+    await prisma.unitOfSale.create({ data: unit });
+  }
+  console.log('✅ Units of Sale seeded.');
 
   // 2. Seed Governorates and Cities (Yemen Region Taxonomy)
   console.log('📍 Seeding Governorates & Cities...');
