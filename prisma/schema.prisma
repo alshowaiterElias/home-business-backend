@@ -123,6 +123,7 @@ model Product {
   rejectionReason String?        @db.Text @map("rejection_reason")
   revisionReason  String?        @db.Text @map("revision_reason")
   isAvailable     Boolean        @default(true) @map("is_available")
+  lastAvailabilityNotifiedAt DateTime? @map("last_availability_notified_at")
   isFeatured      Boolean        @default(false) @map("is_featured")
   averageRating   Decimal        @default(0.0) @db.Decimal(3, 2) @map("average_rating")
   reviewsCount    Int            @default(0) @map("reviews_count")

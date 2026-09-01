@@ -50,11 +50,13 @@ const deleteProduct = async (req, res, next) => {
 
 const toggleAvailability = async (req, res, next) => {
   try {
-    const product = await productService.toggleProductAvailability(req.user.id, req.params.id);
-    const msg = product.isAvailable
-      ? 'تم تفعيل توفر المنتج بنجاح وإبلاغ المتابعين 🔔'
-      : 'تم تعيين المنتج كغير متوفر وحجبه عن العرض';
-    res.json({ success: true, data: product, message: msg });
+    const result = await productService.toggleProductAvailability(req.user.id, req.params.id);
+    res.json({
+      success: true,
+      data: result.product,
+      notificationSent: result.notificationSent,
+      message: result.message
+    });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }

@@ -267,57 +267,99 @@ const toggleProductAvailability = async (userId, productId) => {
     throw new Error('المنتج غير موجود أو ليس لديك صلاحية تعديله');
   }
 
+  const COOLDOWN_MINUTES = 60; // 1 hour notification cooldown
   const newAvailability = !existingProduct.isAvailable;
+  let notificationSent = false;
+  let customMessage = '';
+  let updatedLastNotified = existingProduct.lastAvailabilityNotifiedAt;
+
+  // If product is re-enabled (became available again)
+  if (newAvailability && existingProduct.status === 'APPROVED') {
+    const now = new Date();
+    const lastNotified = existingProduct.lastAvailabilityNotifiedAt;
+    const cooldownMs = COOLDOWN_MINUTES * 60 * 1000;
+
+    let isWithinCooldown = false;
+    let remainingMinutes = 0;
+
+    if (lastNotified) {
+      const elapsedMs = now.getTime() - new Date(lastNotified).getTime();
+      if (elapsedMs < cooldownMs) {
+        isWithinCooldown = true;
+        remainingMinutes = Math.ceil((cooldownMs - elapsedMs) / (60 * 1000));
+      }
+    }
+
+    if (isWithinCooldown) {
+      notificationSent = false;
+      customMessage = `تم تفعيل المنتج في المتجر. لم يتم إرسال إشعار للمتابعين لتجنب التكرار (يمكن إرسال إشعار جديد بعد ${remainingMinutes} دقيقة) ⏱️`;
+    } else {
+      // Cooldown passed or first time: Send notifications & update lastAvailabilityNotifiedAt
+      updatedLastNotified = now;
+      try {
+        const followers = await prisma.storeFollower.findMany({
+          where: { businessId: business.id },
+          select: { userId: true }
+        });
+
+        if (followers.length > 0) {
+          const followerTitle = `المنتج متوفر مجدداً من ${business.businessName} 📦`;
+          const followerBody = `أصبح منتج "${existingProduct.title}" متوفراً مجدداً لدى متجر "${business.businessName}". تصفحه الآن!`;
+
+          const followerUserIds = followers.map((f) => f.userId);
+
+          // Batch insert in-app notifications
+          await prisma.notification.createMany({
+            data: followerUserIds.map((userId) => ({
+              userId,
+              title: followerTitle,
+              body: followerBody,
+              type: 'NEW_PRODUCT_RELEASE'
+            }))
+          });
+
+          // Dispatch FCM push notifications to followers
+          const fcmService = require('./fcmService');
+          for (const followerId of followerUserIds) {
+            fcmService.sendToUser(followerId, followerTitle, followerBody, {
+              type: 'NEW_PRODUCT_RELEASE',
+              productId: existingProduct.id,
+              businessId: business.id
+            }).catch((err) => console.error(`Error sending availability FCM to ${followerId}:`, err));
+          }
+          notificationSent = true;
+          customMessage = 'تم تفعيل توفر المنتج بنجاح وإبلاغ المتابعين 🔔';
+        } else {
+          customMessage = 'تم تفعيل توفر المنتج بنجاح';
+        }
+      } catch (err) {
+        console.error('Error notifying followers of product re-availability:', err);
+        customMessage = 'تم تفعيل توفر المنتج بنجاح';
+      }
+    }
+  } else if (!newAvailability) {
+    customMessage = 'تم تعيين المنتج كغير متوفر وحجبه عن العرض';
+  } else {
+    customMessage = 'تم تحديث حالة توفر المنتج';
+  }
 
   const product = await prisma.product.update({
     where: { id: productId },
-    data: { isAvailable: newAvailability },
+    data: {
+      isAvailable: newAvailability,
+      lastAvailabilityNotifiedAt: updatedLastNotified
+    },
     include: {
       images: { orderBy: { sortOrder: 'asc' } },
       category: true
     }
   });
 
-  // If product is re-enabled (became available again)
-  if (newAvailability && existingProduct.status === 'APPROVED') {
-    try {
-      const followers = await prisma.storeFollower.findMany({
-        where: { businessId: business.id },
-        select: { userId: true }
-      });
-
-      if (followers.length > 0) {
-        const followerTitle = `المنتج متوفر مجدداً من ${business.businessName} 📦`;
-        const followerBody = `أصبح منتج "${existingProduct.title}" متوفراً مجدداً لدى متجر "${business.businessName}". تصفحه الآن!`;
-
-        const followerUserIds = followers.map((f) => f.userId);
-
-        // Batch insert in-app notifications
-        await prisma.notification.createMany({
-          data: followerUserIds.map((userId) => ({
-            userId,
-            title: followerTitle,
-            body: followerBody,
-            type: 'NEW_PRODUCT_RELEASE'
-          }))
-        });
-
-        // Dispatch FCM push notifications to followers
-        const fcmService = require('./fcmService');
-        for (const followerId of followerUserIds) {
-          fcmService.sendToUser(followerId, followerTitle, followerBody, {
-            type: 'NEW_PRODUCT_RELEASE',
-            productId: existingProduct.id,
-            businessId: business.id
-          }).catch((err) => console.error(`Error sending availability FCM to ${followerId}:`, err));
-        }
-      }
-    } catch (err) {
-      console.error('Error notifying followers of product re-availability:', err);
-    }
-  }
-
-  return product;
+  return {
+    product,
+    notificationSent,
+    message: customMessage
+  };
 };
 
 module.exports = {
