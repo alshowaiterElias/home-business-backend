@@ -485,6 +485,7 @@ const getSystemSettings = async () => {
     maxFeaturedBusinesses: 10,
     autoApproveProducts: false,
     maintenanceMode: false,
+    availabilityCooldownMinutes: 60,
     supportPhone: '+967772546343',
     supportEmail: 'alshowaiterelias@gmail.com',
     developerPhone: '+967772546343',
@@ -495,6 +496,7 @@ const getSystemSettings = async () => {
     if (s.key === 'MAX_FEATURED_BUSINESSES') map.maxFeaturedBusinesses = parseInt(s.value, 10) || 10;
     if (s.key === 'AUTO_APPROVE_PRODUCTS') map.autoApproveProducts = s.value === 'true';
     if (s.key === 'MAINTENANCE_MODE') map.maintenanceMode = s.value === 'true';
+    if (s.key === 'AVAILABILITY_COOLDOWN_MINUTES') map.availabilityCooldownMinutes = parseInt(s.value, 10) ?? 60;
     if (s.key === 'SUPPORT_PHONE') map.supportPhone = s.value;
     if (s.key === 'SUPPORT_EMAIL') map.supportEmail = s.value;
     if (s.key === 'DEV_PHONE') map.developerPhone = s.value;
@@ -534,6 +536,13 @@ const updateSystemSettings = async (adminId, data) => {
       where: { key: 'MAINTENANCE_MODE' },
       update: { value: String(data.maintenanceMode) },
       create: { key: 'MAINTENANCE_MODE', value: String(data.maintenanceMode) }
+    }));
+  }
+  if (data.availabilityCooldownMinutes !== undefined) {
+    updates.push(prisma.systemSetting.upsert({
+      where: { key: 'AVAILABILITY_COOLDOWN_MINUTES' },
+      update: { value: String(data.availabilityCooldownMinutes) },
+      create: { key: 'AVAILABILITY_COOLDOWN_MINUTES', value: String(data.availabilityCooldownMinutes) }
     }));
   }
   if (data.supportPhone !== undefined) {

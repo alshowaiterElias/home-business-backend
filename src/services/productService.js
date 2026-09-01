@@ -267,7 +267,11 @@ const toggleProductAvailability = async (userId, productId) => {
     throw new Error('المنتج غير موجود أو ليس لديك صلاحية تعديله');
   }
 
-  const COOLDOWN_MINUTES = 60; // 1 hour notification cooldown
+  // Fetch dynamic notification cooldown from admin settings
+  const cooldownSetting = await prisma.systemSetting.findUnique({
+    where: { key: 'AVAILABILITY_COOLDOWN_MINUTES' }
+  });
+  const COOLDOWN_MINUTES = cooldownSetting ? (parseInt(cooldownSetting.value, 10) ?? 60) : 60;
   const newAvailability = !existingProduct.isAvailable;
   let notificationSent = false;
   let customMessage = '';
