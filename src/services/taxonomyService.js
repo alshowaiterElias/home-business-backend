@@ -10,15 +10,53 @@ const getGovernoratesAndCities = async () => {
 };
 
 const getCategories = async () => {
-  return await prisma.category.findMany({
+  const categories = await prisma.category.findMany({
     where: { parentId: null, isActive: true },
     include: {
       children: {
         where: { isActive: true },
-        orderBy: { sortOrder: 'asc' }
+        orderBy: { sortOrder: 'asc' },
+        include: {
+          _count: {
+            select: {
+              products: {
+                where: { status: 'APPROVED', isAvailable: true }
+              }
+            }
+          }
+        }
+      },
+      _count: {
+        select: {
+          products: {
+            where: { status: 'APPROVED', isAvailable: true }
+          }
+        }
       }
     },
     orderBy: { sortOrder: 'asc' }
+  });
+
+  return categories.map((cat) => {
+    const directCount = cat._count?.products || 0;
+    const childrenWithCounts = (cat.children || []).map((child) => ({
+      ...child,
+      _count: {
+        products: child._count?.products || 0
+      }
+    }));
+    const childrenTotal = childrenWithCounts.reduce(
+      (sum, child) => sum + (child._count?.products || 0),
+      0
+    );
+
+    return {
+      ...cat,
+      children: childrenWithCounts,
+      _count: {
+        products: directCount + childrenTotal
+      }
+    };
   });
 };
 
