@@ -24,7 +24,13 @@ const toggleFavorite = async (userId, productId) => {
 
 const getUserFavorites = async (userId) => {
   return await prisma.favoriteProduct.findMany({
-    where: { userId },
+    where: {
+      userId,
+      product: {
+        status: 'APPROVED',
+        isAvailable: true
+      }
+    },
     include: {
       product: {
         include: { images: true, business: { select: { businessName: true } } }
