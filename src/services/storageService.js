@@ -10,15 +10,14 @@ const sharp = require('sharp');
  * @param {string} folder - Target folder in bucket (e.g. 'products', 'businesses', 'users')
  * @returns {Promise<string>} Public HTTPS URL of the uploaded optimized image
  */
+const path = require('path');
+const fs = require('fs');
+
 async function uploadToFirebase(buffer, originalName, mimeType, folder = 'uploads') {
   const bucket = getBucket();
-  if (!bucket) {
-    throw new Error('Firebase Storage is not initialized. Check your Firebase service account key.');
-  }
-
   let finalBuffer = buffer;
   let finalMimeType = mimeType;
-  let ext = originalName.includes('.') ? originalName.split('.').pop().toLowerCase() : 'jpg';
+  let ext = (originalName && originalName.includes('.')) ? originalName.split('.').pop().toLowerCase() : 'jpg';
 
   // Perform server-side image compression & WebP conversion for all images
   if (mimeType && mimeType.startsWith('image/')) {
@@ -39,6 +38,20 @@ async function uploadToFirebase(buffer, originalName, mimeType, folder = 'upload
   }
 
   const fileName = `${folder}/${crypto.randomUUID()}.${ext}`;
+
+  if (!bucket) {
+    // Local storage fallback
+    const targetDir = path.join(__dirname, '../../uploads', folder);
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+    const localFilePath = path.join(targetDir, `${crypto.randomUUID()}.${ext}`);
+    fs.writeFileSync(localFilePath, finalBuffer);
+    const relativeUrl = `/uploads/${folder}/${path.basename(localFilePath)}`;
+    console.log(`📁 Uploaded file locally: ${relativeUrl}`);
+    return relativeUrl;
+  }
+
   const file = bucket.file(fileName);
   const downloadToken = crypto.randomUUID();
 
