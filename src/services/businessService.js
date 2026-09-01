@@ -40,21 +40,42 @@ const createOrUpdateBusiness = async (userId, data, file) => {
   });
 };
 
-const getBusinessById = async (id) => {
+const getBusinessById = async (id, currentUserId = null) => {
   const business = await prisma.business.findUnique({
     where: { id },
     include: {
       city: { include: { governorate: true } },
       products: {
         where: { status: 'APPROVED', isAvailable: true },
-        take: 20, // Limit initial payload size
+        take: 20,
         orderBy: { createdAt: 'desc' },
         include: { images: true }
+      },
+      _count: {
+        select: { followers: true }
       }
     }
   });
   if (!business || !business.isActive) throw new Error('Business not found or suspended');
-  return business;
+
+  let isFollowed = false;
+  if (currentUserId) {
+    const followerRecord = await prisma.storeFollower.findUnique({
+      where: {
+        userId_businessId: {
+          userId: currentUserId,
+          businessId: id
+        }
+      }
+    });
+    isFollowed = Boolean(followerRecord);
+  }
+
+  return {
+    ...business,
+    followersCount: business._count?.followers || 0,
+    isFollowed
+  };
 };
 
 const getBusinessByUserId = async (userId) => {
@@ -64,11 +85,89 @@ const getBusinessByUserId = async (userId) => {
       city: { include: { governorate: true } },
       products: {
         include: { images: true }
+      },
+      _count: {
+        select: { followers: true }
       }
     }
   });
   if (!business) throw new Error('Business not found');
-  return business;
+  return {
+    ...business,
+    followersCount: business._count?.followers || 0
+  };
+};
+
+const toggleFollowStore = async (userId, businessId) => {
+  const business = await prisma.business.findUnique({ where: { id: businessId } });
+  if (!business || !business.isActive) {
+    throw new Error('المتجر غير موجود أو غير مفعل');
+  }
+
+  const existingFollower = await prisma.storeFollower.findUnique({
+    where: {
+      userId_businessId: {
+        userId,
+        businessId
+      }
+    }
+  });
+
+  let isFollowed = false;
+  if (existingFollower) {
+    // Unfollow
+    await prisma.storeFollower.delete({
+      where: { id: existingFollower.id }
+    });
+    isFollowed = false;
+  } else {
+    // Follow
+    await prisma.storeFollower.create({
+      data: {
+        userId,
+        businessId
+      }
+    });
+    isFollowed = true;
+  }
+
+  const followersCount = await prisma.storeFollower.count({
+    where: { businessId }
+  });
+
+  return {
+    isFollowed,
+    followersCount
+  };
+};
+
+const getFollowedStores = async (userId) => {
+  const followers = await prisma.storeFollower.findMany({
+    where: { userId },
+    include: {
+      business: {
+        include: {
+          city: { include: { governorate: true } },
+          products: {
+            where: { status: 'APPROVED', isAvailable: true },
+            select: { id: true, averageRating: true, reviewsCount: true }
+          },
+          _count: {
+            select: { followers: true }
+          }
+        }
+      }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  return followers
+    .filter((f) => f.business && f.business.isActive)
+    .map((f) => ({
+      ...f.business,
+      followersCount: f.business._count?.followers || 0,
+      isFollowed: true
+    }));
 };
 
 const getAllBusinesses = async (filters) => {
@@ -99,6 +198,9 @@ const getAllBusinesses = async (filters) => {
       products: {
         where: { status: 'APPROVED', isAvailable: true },
         select: { id: true, averageRating: true, reviewsCount: true }
+      },
+      _count: {
+        select: { followers: true }
       }
     },
     orderBy: { createdAt: 'desc' }
@@ -116,13 +218,26 @@ const getAllBusinesses = async (filters) => {
         products: {
           where: { status: 'APPROVED', isAvailable: true },
           select: { id: true, averageRating: true, reviewsCount: true }
+        },
+        _count: {
+          select: { followers: true }
         }
       },
       orderBy: { createdAt: 'desc' }
     });
   }
 
-  return businesses;
+  return businesses.map((b) => ({
+    ...b,
+    followersCount: b._count?.followers || 0
+  }));
 };
 
-module.exports = { createOrUpdateBusiness, getBusinessById, getBusinessByUserId, getAllBusinesses };
+module.exports = {
+  createOrUpdateBusiness,
+  getBusinessById,
+  getBusinessByUserId,
+  toggleFollowStore,
+  getFollowedStores,
+  getAllBusinesses
+};

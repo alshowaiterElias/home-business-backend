@@ -21,6 +21,7 @@ model User {
   business         Business?
   reviews          ProductReview[]
   favoriteProducts FavoriteProduct[]
+  followedStores   StoreFollower[]
   reports          Report[]
   deviceTokens     DeviceToken[]
   adminAuditLogs   AdminAuditLog[]
@@ -53,10 +54,26 @@ model Business {
   city           City      @relation(fields: [cityId], references: [id], onDelete: Restrict)
   products       Product[]
   advertisements Advertisement[]
+  followers      StoreFollower[]
 
   @@index([cityId])
   @@index([isFeatured])
   @@map("businesses")
+}
+
+model StoreFollower {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  businessId String   @map("business_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, businessId])
+  @@index([userId])
+  @@index([businessId])
+  @@map("store_followers")
 }
 
 model Governorate {
