@@ -13,5 +13,7 @@ router.get('/:id', cacheControl(60), productController.getProductById);
 
 // Protected routes (Requires login)
 router.post('/', protect, upload.array('productImages', 5), scanFiles, validate(productSchemas.createProduct), productController.createProduct);
+router.put('/:id', protect, upload.array('productImages', 5), scanFiles, productController.updateProduct);
+router.delete('/:id', protect, productController.deleteProduct);
 
 module.exports = router;

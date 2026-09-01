@@ -30,8 +30,28 @@ const createProduct = async (req, res, next) => {
   }
 };
 
+const updateProduct = async (req, res, next) => {
+  try {
+    const product = await productService.updateProduct(req.user.id, req.params.id, req.body, req.files || []);
+    res.json({ success: true, data: product, message: 'تم تحديث المنتج وإعادة تقديمه بنجاح' });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+const deleteProduct = async (req, res, next) => {
+  try {
+    await productService.deleteProductBySeller(req.user.id, req.params.id);
+    res.json({ success: true, message: 'تم حذف المنتج بنجاح' });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getPublicProducts,
   getProductById,
-  createProduct
+  createProduct,
+  updateProduct,
+  deleteProduct
 };

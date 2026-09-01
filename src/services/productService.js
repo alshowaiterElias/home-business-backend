@@ -172,8 +172,94 @@ const createProduct = async (userId, data, imageFiles) => {
   return product;
 };
 
+const updateProduct = async (userId, productId, data, imageFiles = []) => {
+  const business = await prisma.business.findUnique({ where: { userId } });
+  if (!business) {
+    throw new Error('يجب إنشاء ملف متجر أولاً لتعديل المنتجات');
+  }
+
+  if (!business.isActive) {
+    throw new Error('حسابك معطل حالياً من قبل الإدارة. لا يمكنك تعديل المنتجات.');
+  }
+
+  const existingProduct = await prisma.product.findUnique({
+    where: { id: productId },
+    include: { images: true }
+  });
+
+  if (!existingProduct || existingProduct.businessId !== business.id) {
+    throw new Error('المنتج غير موجود أو ليس لديك صلاحية تعديله');
+  }
+
+  const updateData = {};
+  if (data.title) updateData.title = data.title;
+  if (data.description) updateData.description = data.description;
+  if (data.price !== undefined) updateData.price = parseFloat(data.price);
+  if (data.currency) updateData.currency = data.currency;
+  if (data.unitOfSale) updateData.unitOfSale = data.unitOfSale;
+  if (data.categoryId) {
+    const category = await prisma.category.findUnique({ where: { id: data.categoryId } });
+    if (!category || !category.isActive) {
+      throw new Error('التصنيف المختار غير متاح');
+    }
+    updateData.categoryId = data.categoryId;
+  }
+
+  // If product was in NEEDS_REVISION or REJECTED status, reset status to PENDING for admin re-review
+  if (existingProduct.status === 'NEEDS_REVISION' || existingProduct.status === 'REJECTED') {
+    updateData.status = 'PENDING';
+  }
+
+  // Handle images update if new image files are uploaded
+  if (imageFiles && imageFiles.length > 0) {
+    const images = await Promise.all(
+      imageFiles.map(async (file, index) => {
+        const publicUrl = await uploadToFirebase(file.buffer, file.originalname, file.mimetype, 'products');
+        return {
+          imageUrl: publicUrl,
+          isCover: index === 0,
+          sortOrder: index + 1
+        };
+      })
+    );
+
+    await prisma.productImage.deleteMany({ where: { productId } });
+    updateData.images = {
+      create: images
+    };
+  }
+
+  const product = await prisma.product.update({
+    where: { id: productId },
+    data: updateData,
+    include: {
+      images: { orderBy: { sortOrder: 'asc' } },
+      category: true
+    }
+  });
+
+  return product;
+};
+
+const deleteProductBySeller = async (userId, productId) => {
+  const business = await prisma.business.findUnique({ where: { userId } });
+  if (!business) {
+    throw new Error('المتجر غير موجود');
+  }
+
+  const existingProduct = await prisma.product.findUnique({ where: { id: productId } });
+  if (!existingProduct || existingProduct.businessId !== business.id) {
+    throw new Error('المنتج غير موجود أو ليس لديك صلاحية حذفه');
+  }
+
+  await prisma.product.delete({ where: { id: productId } });
+  return { success: true };
+};
+
 module.exports = {
   getPublicProducts,
   getProductById,
-  createProduct
+  createProduct,
+  updateProduct,
+  deleteProductBySeller
 };

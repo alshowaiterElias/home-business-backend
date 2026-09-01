@@ -121,6 +121,7 @@ model Product {
   unitOfSale      String         @map("unit_of_sale")
   status          ProductStatus  @default(PENDING)
   rejectionReason String?        @db.Text @map("rejection_reason")
+  revisionReason  String?        @db.Text @map("revision_reason")
   isAvailable     Boolean        @default(true) @map("is_available")
   isFeatured      Boolean        @default(false) @map("is_featured")
   averageRating   Decimal        @default(0.0) @db.Decimal(3, 2) @map("average_rating")
@@ -146,6 +147,7 @@ enum ProductStatus {
   APPROVED
   REJECTED
   SUSPENDED
+  NEEDS_REVISION
 }
 
 model ProductImage {
@@ -265,6 +267,7 @@ enum NotificationType {
   PRODUCT_APPROVED
   PRODUCT_REJECTED
   PRODUCT_SUSPENDED
+  PRODUCT_NEEDS_REVISION
   NEW_REVIEW
   SYSTEM_ALERT
   NEW_PRODUCT_RELEASE

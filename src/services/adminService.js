@@ -90,10 +90,11 @@ const getAllProducts = async ({ status, categoryId, search }) => {
 
 const fcmService = require('./fcmService');
 
-const updateProductStatus = async (adminId, productId, status, rejectionReason = null) => {
+const updateProductStatus = async (adminId, productId, status, rejectionReason = null, revisionReason = null) => {
   const updateData = {
     status,
-    rejectionReason: status === 'REJECTED' ? rejectionReason : null
+    rejectionReason: status === 'REJECTED' ? rejectionReason : null,
+    revisionReason: status === 'NEEDS_REVISION' ? revisionReason : null
   };
   if (status === 'SUSPENDED') {
     updateData.isFeatured = false;
@@ -107,13 +108,14 @@ const updateProductStatus = async (adminId, productId, status, rejectionReason =
   let action = 'APPROVE_PRODUCT';
   if (status === 'REJECTED') action = 'REJECT_PRODUCT';
   if (status === 'SUSPENDED') action = 'SUSPEND_PRODUCT';
+  if (status === 'NEEDS_REVISION') action = 'REQUEST_PRODUCT_REVISION';
 
   await prisma.adminAuditLog.create({
     data: {
       adminId,
       action,
       targetId: productId,
-      details: { rejectionReason }
+      details: { rejectionReason, revisionReason }
     }
   });
 
@@ -171,6 +173,11 @@ const updateProductStatus = async (adminId, productId, status, rejectionReason =
       const body = `تم توقيف منتجك "${product.title}" من قبل إدارة المنصة. يرجى التواصل مع الدعم لمزيد من المعلومات.`;
       await notificationService.createNotification(business.userId, title, body, 'PRODUCT_SUSPENDED');
       await fcmService.sendToUser(business.userId, title, body, { type: 'PRODUCT_SUSPENDED', productId });
+    } else if (status === 'NEEDS_REVISION') {
+      const title = 'طلب تعديل على منتجك 📝';
+      const body = `طلب الأدمن إجراء تعديلات على منتجك "${product.title}" — الملاحظات: ${revisionReason}`;
+      await notificationService.createNotification(business.userId, title, body, 'PRODUCT_NEEDS_REVISION');
+      await fcmService.sendToUser(business.userId, title, body, { type: 'PRODUCT_NEEDS_REVISION', productId, revisionReason });
     }
   }
 

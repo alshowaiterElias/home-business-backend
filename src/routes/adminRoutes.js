@@ -15,6 +15,7 @@ router.get('/products', adminController.getAllProducts);
 router.put('/products/:id/approve', adminController.approveProduct);
 router.put('/products/:id/reject', adminController.rejectProduct);
 router.put('/products/:id/suspend', adminController.suspendProduct);
+router.put('/products/:id/request-revision', adminController.requestProductRevision);
 router.patch('/products/:id/featured', adminController.toggleProductFeatured);
 router.delete('/products/:id', adminController.deleteProduct);
 

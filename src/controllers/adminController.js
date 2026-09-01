@@ -57,6 +57,18 @@ const suspendProduct = async (req, res, next) => {
   }
 };
 
+const requestProductRevision = async (req, res, next) => {
+  try {
+    const { revisionReason } = req.body;
+    if (!revisionReason) return res.status(400).json({ success: false, message: 'ملاحظات التعديل مطلوبة' });
+
+    const product = await adminService.updateProductStatus(req.user.id, req.params.id, 'NEEDS_REVISION', null, revisionReason);
+    res.json({ success: true, data: product, message: 'تم إرسال طلب التعديل إلى التاجر بنجاح' });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 const deleteProduct = async (req, res, next) => {
   try {
     await adminService.deleteProductByAdmin(req.user.id, req.params.id);
@@ -310,6 +322,7 @@ module.exports = {
   approveProduct,
   rejectProduct,
   suspendProduct,
+  requestProductRevision,
   deleteProduct,
   getAllUsers,
   updateUserRole,
