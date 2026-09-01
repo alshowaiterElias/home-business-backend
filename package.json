@@ -7,6 +7,7 @@
     "start": "node src/server.js",
     "start:pm2": "pm2 start ecosystem.config.js --env production",
     "dev": "nodemon src/server.js",
+    "build": "prisma generate && prisma db push",
     "generate:jwt": "node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\"",
     "db:push": "prisma db push",
     "db:deploy": "prisma migrate deploy",
