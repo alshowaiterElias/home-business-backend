@@ -125,6 +125,42 @@ const updateProductStatus = async (adminId, productId, status, rejectionReason =
       const body = `تمت الموافقة على "${product.title}" وهو الآن متاح للعملاء في التطبيق.`;
       await notificationService.createNotification(business.userId, title, body, 'PRODUCT_APPROVED');
       await fcmService.sendToUser(business.userId, title, body, { type: 'PRODUCT_APPROVED', productId });
+
+      // Notify all followers of this store
+      try {
+        const followers = await prisma.storeFollower.findMany({
+          where: { businessId: business.id },
+          select: { userId: true }
+        });
+
+        if (followers.length > 0) {
+          const followerTitle = `منتج جديد من ${business.businessName} 🛍️`;
+          const followerBody = `أضاف متجر "${business.businessName}" الذي تتابعه منتجاً جديداً: "${product.title}". تصفحه الآن!`;
+
+          const followerUserIds = followers.map((f) => f.userId);
+
+          // Batch insert in-app notifications
+          await prisma.notification.createMany({
+            data: followerUserIds.map((userId) => ({
+              userId,
+              title: followerTitle,
+              body: followerBody,
+              type: 'NEW_PRODUCT_RELEASE'
+            }))
+          });
+
+          // Dispatch FCM push notifications to followers
+          for (const followerId of followerUserIds) {
+            fcmService.sendToUser(followerId, followerTitle, followerBody, {
+              type: 'NEW_PRODUCT_RELEASE',
+              productId: product.id,
+              businessId: business.id
+            }).catch((err) => console.error(`Error sending follower FCM to ${followerId}:`, err));
+          }
+        }
+      } catch (err) {
+        console.error('Error notifying store followers on product approval:', err);
+      }
     } else if (status === 'REJECTED') {
       const title = 'تم رفض منتجك ⚠️';
       const body = `تم رفض "${product.title}" — السبب: ${rejectionReason}`;
