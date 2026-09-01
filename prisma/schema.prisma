@@ -267,6 +267,7 @@ enum NotificationType {
   PRODUCT_SUSPENDED
   NEW_REVIEW
   SYSTEM_ALERT
+  NEW_PRODUCT_RELEASE
 }
 
 model WhatsAppTemplate {
