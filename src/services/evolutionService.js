@@ -189,7 +189,77 @@ const getInstanceStatus = async () => {
 };
 
 /**
+ * Creates a new instance cleanly with standard browser configuration.
+ */
+const createInstance = async (qrcode = true) => {
+  const baseUrl = getCleanBaseUrl();
+  if (!baseUrl || !EVOLUTION_API_KEY) {
+    throw new Error('Evolution API is not configured.');
+  }
+
+  // First logout & delete existing instance to wipe any corrupted session auth state
+  try {
+    await deleteInstance();
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  } catch (e) {
+    console.warn('[Evolution API] Non-fatal cleanup before createInstance:', e.message);
+  }
+
+  const url = `${baseUrl}/instance/create`;
+  const result = await safeFetchJson(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': EVOLUTION_API_KEY
+    },
+    body: JSON.stringify({
+      instanceName: EVOLUTION_INSTANCE,
+      integration: 'WHATSAPP-BAILEYS',
+      qrcode: Boolean(qrcode),
+      browser: 'Ubuntu'
+    })
+  });
+
+  if (!result.ok && result.status !== 403) {
+    throw new Error(result.data?.message || 'Failed to create instance');
+  }
+
+  return result.data;
+};
+
+/**
+ * Deletes & logs out an existing instance completely.
+ */
+const deleteInstance = async () => {
+  const baseUrl = getCleanBaseUrl();
+  if (!baseUrl || !EVOLUTION_API_KEY) {
+    throw new Error('Evolution API is not configured.');
+  }
+
+  // Step 1: Explicitly logout of Baileys session
+  try {
+    const logoutUrl = `${baseUrl}/instance/logout/${EVOLUTION_INSTANCE}`;
+    await safeFetchJson(logoutUrl, {
+      method: 'DELETE',
+      headers: { 'apikey': EVOLUTION_API_KEY }
+    });
+  } catch (e) {
+    console.warn('[Evolution API] Logout non-fatal notice:', e.message);
+  }
+
+  // Step 2: Delete instance from database & disk
+  const url = `${baseUrl}/instance/delete/${EVOLUTION_INSTANCE}`;
+  const result = await safeFetchJson(url, {
+    method: 'DELETE',
+    headers: { 'apikey': EVOLUTION_API_KEY }
+  });
+
+  return result.data;
+};
+
+/**
  * Fetches QR Code (base64 image) for scanning.
+ * Auto-creates instance if it does not exist.
  */
 const getQRCode = async () => {
   const baseUrl = getCleanBaseUrl();
@@ -197,10 +267,19 @@ const getQRCode = async () => {
     throw new Error('Evolution API is not configured.');
   }
 
-  const url = `${baseUrl}/instance/connect/${EVOLUTION_INSTANCE}`;
-  const result = await safeFetchJson(url, {
+  let url = `${baseUrl}/instance/connect/${EVOLUTION_INSTANCE}`;
+  let result = await safeFetchJson(url, {
     headers: { 'apikey': EVOLUTION_API_KEY }
   });
+
+  // If instance is not found (404), create fresh instance first
+  if (!result.ok && (result.status === 404 || result.data?.message?.includes('not found'))) {
+    console.log('[Evolution API] Instance not found. Re-creating clean instance...');
+    await createInstance(true);
+    result = await safeFetchJson(url, {
+      headers: { 'apikey': EVOLUTION_API_KEY }
+    });
+  }
 
   if (!result.ok) {
     throw new Error(result.data?.message || 'Failed to fetch QR Code');
@@ -224,10 +303,18 @@ const getPairingCode = async (phoneNumber) => {
   }
 
   const cleanPhone = normalizeForWhatsApp(phoneNumber);
-  const url = `${baseUrl}/instance/connect/${EVOLUTION_INSTANCE}?number=${cleanPhone}`;
-  const result = await safeFetchJson(url, {
+  let url = `${baseUrl}/instance/connect/${EVOLUTION_INSTANCE}?number=${cleanPhone}`;
+  let result = await safeFetchJson(url, {
     headers: { 'apikey': EVOLUTION_API_KEY }
   });
+
+  if (!result.ok && (result.status === 404 || result.data?.message?.includes('not found'))) {
+    console.log('[Evolution API] Instance not found. Re-creating clean instance...');
+    await createInstance(true);
+    result = await safeFetchJson(url, {
+      headers: { 'apikey': EVOLUTION_API_KEY }
+    });
+  }
 
   if (!result.ok) {
     throw new Error(result.data?.message || 'Failed to fetch Pairing Code');
@@ -237,54 +324,6 @@ const getPairingCode = async (phoneNumber) => {
     pairingCode: result.data?.pairingCode || null,
     code: result.data?.code || null
   };
-};
-
-/**
- * Creates a new instance.
- */
-const createInstance = async (qrcode = true) => {
-  const baseUrl = getCleanBaseUrl();
-  if (!baseUrl || !EVOLUTION_API_KEY) {
-    throw new Error('Evolution API is not configured.');
-  }
-
-  const url = `${baseUrl}/instance/create`;
-  const result = await safeFetchJson(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': EVOLUTION_API_KEY
-    },
-    body: JSON.stringify({
-      instanceName: EVOLUTION_INSTANCE,
-      integration: 'WHATSAPP-BAILEYS',
-      qrcode: Boolean(qrcode)
-    })
-  });
-
-  if (!result.ok && result.status !== 403) {
-    throw new Error(result.data?.message || 'Failed to create instance');
-  }
-
-  return result.data;
-};
-
-/**
- * Deletes / disconnects an existing instance.
- */
-const deleteInstance = async () => {
-  const baseUrl = getCleanBaseUrl();
-  if (!baseUrl || !EVOLUTION_API_KEY) {
-    throw new Error('Evolution API is not configured.');
-  }
-
-  const url = `${baseUrl}/instance/delete/${EVOLUTION_INSTANCE}`;
-  const result = await safeFetchJson(url, {
-    method: 'DELETE',
-    headers: { 'apikey': EVOLUTION_API_KEY }
-  });
-
-  return result.data;
 };
 
 module.exports = {
