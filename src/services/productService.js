@@ -256,10 +256,75 @@ const deleteProductBySeller = async (userId, productId) => {
   return { success: true };
 };
 
+const toggleProductAvailability = async (userId, productId) => {
+  const business = await prisma.business.findUnique({ where: { userId } });
+  if (!business) {
+    throw new Error('المتجر غير موجود');
+  }
+
+  const existingProduct = await prisma.product.findUnique({ where: { id: productId } });
+  if (!existingProduct || existingProduct.businessId !== business.id) {
+    throw new Error('المنتج غير موجود أو ليس لديك صلاحية تعديله');
+  }
+
+  const newAvailability = !existingProduct.isAvailable;
+
+  const product = await prisma.product.update({
+    where: { id: productId },
+    data: { isAvailable: newAvailability },
+    include: {
+      images: { orderBy: { sortOrder: 'asc' } },
+      category: true
+    }
+  });
+
+  // If product is re-enabled (became available again)
+  if (newAvailability && existingProduct.status === 'APPROVED') {
+    try {
+      const followers = await prisma.storeFollower.findMany({
+        where: { businessId: business.id },
+        select: { userId: true }
+      });
+
+      if (followers.length > 0) {
+        const followerTitle = `المنتج متوفر مجدداً من ${business.businessName} 📦`;
+        const followerBody = `أصبح منتج "${existingProduct.title}" متوفراً مجدداً لدى متجر "${business.businessName}". تصفحه الآن!`;
+
+        const followerUserIds = followers.map((f) => f.userId);
+
+        // Batch insert in-app notifications
+        await prisma.notification.createMany({
+          data: followerUserIds.map((userId) => ({
+            userId,
+            title: followerTitle,
+            body: followerBody,
+            type: 'NEW_PRODUCT_RELEASE'
+          }))
+        });
+
+        // Dispatch FCM push notifications to followers
+        const fcmService = require('./fcmService');
+        for (const followerId of followerUserIds) {
+          fcmService.sendToUser(followerId, followerTitle, followerBody, {
+            type: 'NEW_PRODUCT_RELEASE',
+            productId: existingProduct.id,
+            businessId: business.id
+          }).catch((err) => console.error(`Error sending availability FCM to ${followerId}:`, err));
+        }
+      }
+    } catch (err) {
+      console.error('Error notifying followers of product re-availability:', err);
+    }
+  }
+
+  return product;
+};
+
 module.exports = {
   getPublicProducts,
   getProductById,
   createProduct,
   updateProduct,
-  deleteProductBySeller
+  deleteProductBySeller,
+  toggleProductAvailability
 };
