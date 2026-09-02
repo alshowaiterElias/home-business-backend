@@ -10,17 +10,24 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'super_secret_jwt_key_
   }
 }
 
+const http = require('http');
 const app = require('./app');
 const prisma = require('./config/db');
+const { initSocket } = require('./config/socket');
 
 const PORT = process.env.PORT || 5000;
 
 const { cleanupOrphanedImages } = require('./utils/cleanup');
 
-const server = app.listen(PORT, () => {
+// Create HTTP server and attach Socket.IO
+const httpServer = http.createServer(app);
+const io = initSocket(httpServer);
+
+httpServer.listen(PORT, () => {
   console.log(`=================================`);
   console.log(`🚀 Server is running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
+  console.log(`💬 Socket.IO attached and ready`);
   console.log(`=================================`);
 
   // Run cleanup every 24 hours (24 * 60 * 60 * 1000)
@@ -30,7 +37,13 @@ const server = app.listen(PORT, () => {
 // Graceful shutdown
 const gracefulShutdown = async (signal) => {
   console.log(`\n${signal} received. Shutting down gracefully...`);
-  server.close(async () => {
+
+  // Close Socket.IO connections
+  io.close(() => {
+    console.log('💬 Socket.IO connections closed.');
+  });
+
+  httpServer.close(async () => {
     await prisma.$disconnect();
     console.log('✅ Database disconnected. Process exiting.');
     process.exit(0);
@@ -54,3 +67,4 @@ process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error);
   gracefulShutdown('UNCAUGHT_EXCEPTION');
 });
+

@@ -27,6 +27,12 @@ model User {
   adminAuditLogs   AdminAuditLog[]
   notifications    Notification[]
 
+  // Chat relations
+  conversationParticipants ConversationParticipant[]
+  messagesSent             Message[]    @relation("MessagesSent")
+  blocksGiven              UserBlock[]  @relation("BlocksGiven")
+  blocksReceived           UserBlock[]  @relation("BlocksReceived")
+
   @@map("users")
 }
 
@@ -269,10 +275,106 @@ enum NotificationType {
   PRODUCT_REJECTED
   PRODUCT_SUSPENDED
   PRODUCT_NEEDS_REVISION
+  NEW_CHAT_MESSAGE
   NEW_REVIEW
   SYSTEM_ALERT
   NEW_PRODUCT_RELEASE
 }
+
+// ─── Chat System Models ─────────────────────────────────────────
+
+model Conversation {
+  id              String                    @id @default(uuid())
+  createdAt       DateTime                  @default(now()) @map("created_at")
+  updatedAt       DateTime                  @updatedAt @map("updated_at")
+  lastMessageId   String?                   @unique @map("last_message_id")
+
+  participants    ConversationParticipant[]
+  messages        Message[]
+  lastMessage     Message?                  @relation("LastMessage", fields: [lastMessageId], references: [id], onDelete: SetNull)
+
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id                String       @id @default(uuid())
+  conversationId    String       @map("conversation_id")
+  userId            String       @map("user_id")
+  lastReadMessageId String?      @map("last_read_message_id")
+  joinedAt          DateTime     @default(now()) @map("joined_at")
+  isMuted           Boolean      @default(false) @map("is_muted")
+  isArchived        Boolean      @default(false) @map("is_archived")
+  isDeleted         Boolean      @default(false) @map("is_deleted")
+
+  conversation      Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id              String       @id @default(uuid())
+  conversationId  String       @map("conversation_id")
+  senderId        String       @map("sender_id")
+  type            MessageType  @default(TEXT)
+  text            String?      @db.Text
+  tempId          String?      @map("temp_id")
+  replyToId       String?      @map("reply_to_id")
+  deletedAt       DateTime?    @map("deleted_at")
+  deletedForAll   Boolean      @default(false) @map("deleted_for_all")
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender          User         @relation("MessagesSent", fields: [senderId], references: [id], onDelete: Cascade)
+  replyTo         Message?     @relation("Replies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies         Message[]    @relation("Replies")
+  reference       MessageReference?
+  lastOfConversation Conversation? @relation("LastMessage")
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+  @@map("messages")
+}
+
+enum MessageType {
+  TEXT
+  PRODUCT_REFERENCE
+  STORE_REFERENCE
+  SYSTEM_MESSAGE
+}
+
+model MessageReference {
+  id               String  @id @default(uuid())
+  messageId        String  @unique @map("message_id")
+  referenceType    String  @map("reference_type")
+  referenceId      String  @map("reference_id")
+  snapshotTitle    String? @map("snapshot_title")
+  snapshotPrice    String? @map("snapshot_price")
+  snapshotImage    String? @map("snapshot_image")    @db.Text
+  snapshotMeta     Json?   @map("snapshot_meta")
+
+  message          Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([referenceType, referenceId])
+  @@map("message_references")
+}
+
+model UserBlock {
+  id          String   @id @default(uuid())
+  blockerId   String   @map("blocker_id")
+  blockedId   String   @map("blocked_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  blocker     User     @relation("BlocksGiven", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked     User     @relation("BlocksReceived", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@map("user_blocks")
+}
+
+// ─── WhatsApp & System Models ───────────────────────────────────
 
 model WhatsAppTemplate {
   id        String   @id @default(uuid())

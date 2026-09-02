@@ -17,6 +17,7 @@ const notificationRoutes = require('./notificationRoutes');
 const whatsappRoutes = require('./whatsappRoutes');
 const aiRoutes = require('./aiRoutes');
 const adRoutes = require('./adRoutes');
+const chatRoutes = require('./chatRoutes');
 
 router.use('/auth', authRoutes);
 router.use('/taxonomy', taxonomyRoutes);
@@ -29,6 +30,7 @@ router.use('/notifications', notificationRoutes);
 router.use('/whatsapp', whatsappRoutes);
 router.use('/ai', aiRoutes);
 router.use('/ads', adRoutes);
+router.use('/chat', chatRoutes);
 
 // Public app configuration endpoint
 router.get('/config', async (req, res) => {
