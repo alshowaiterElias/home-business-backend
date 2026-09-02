@@ -390,10 +390,25 @@ const deleteReview = async (adminId, reviewId) => {
 };
 
 const getReports = async () => {
-  return await prisma.report.findMany({
+  const reports = await prisma.report.findMany({
     include: { reporter: { select: { phoneNumber: true } } },
     orderBy: { createdAt: 'desc' }
   });
+
+  // Attach message data for MESSAGE reports
+  for (const report of reports) {
+    if (report.targetType === 'MESSAGE') {
+      const message = await prisma.message.findUnique({
+        where: { id: report.targetId },
+        select: { conversationId: true, text: true, sender: { select: { phoneNumber: true } } }
+      });
+      if (message) {
+        report.messageData = message;
+      }
+    }
+  }
+
+  return reports;
 };
 
 const getAuditLogs = async () => {
@@ -402,6 +417,29 @@ const getAuditLogs = async () => {
     orderBy: { createdAt: 'desc' },
     take: 100
   });
+};
+
+const getConversationMessages = async (adminId, conversationId) => {
+  const messages = await prisma.message.findMany({
+    where: { conversationId },
+    orderBy: { createdAt: 'asc' },
+    include: {
+      sender: { select: { id: true, phoneNumber: true } },
+      reference: true,
+      replyTo: { select: { text: true, sender: { select: { phoneNumber: true } } } }
+    }
+  });
+
+  await prisma.adminAuditLog.create({
+    data: {
+      adminId,
+      action: 'VIEW_CONVERSATION_LOGS',
+      targetId: conversationId,
+      details: { messagesCount: messages.length }
+    }
+  });
+
+  return messages;
 };
 
 const resolveReport = async (adminId, reportId) => {
@@ -680,5 +718,6 @@ module.exports = {
   updateSystemSettings,
   toggleProductFeatured,
   toggleBusinessFeatured,
-  getSettingValue
+  getSettingValue,
+  getConversationMessages
 };

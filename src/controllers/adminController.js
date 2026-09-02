@@ -165,6 +165,15 @@ const resolveReport = async (req, res, next) => {
   }
 };
 
+const getConversationMessages = async (req, res, next) => {
+  try {
+    const messages = await adminService.getConversationMessages(req.user.id, req.params.id);
+    res.json({ success: true, data: messages });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getAuditLogs = async (req, res, next) => {
   try {
     const logs = await adminService.getAuditLogs();
@@ -345,5 +354,6 @@ module.exports = {
   getSettings,
   updateSettings,
   toggleProductFeatured,
-  toggleBusinessFeatured
+  toggleBusinessFeatured,
+  getConversationMessages
 };

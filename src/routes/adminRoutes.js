@@ -36,6 +36,7 @@ router.delete('/reviews/:id', adminController.deleteReview);
 // Reports Management
 router.get('/reports', adminController.getReports);
 router.put('/reports/:id/resolve', adminController.resolveReport);
+router.get('/reports/conversations/:id', adminController.getConversationMessages);
 
 // System Settings
 router.get('/settings', adminController.getSettings);
