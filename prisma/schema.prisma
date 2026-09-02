@@ -216,6 +216,7 @@ enum ReportTarget {
   PRODUCT
   REVIEW
   BUSINESS
+  MESSAGE
 }
 
 enum ReportStatus {
@@ -419,5 +420,3 @@ model Advertisement {
   @@index([isActive])
   @@map("advertisements")
 }
-
-
