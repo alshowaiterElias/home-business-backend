@@ -16,10 +16,15 @@ app.set('trust proxy', 1);
 app.use(helmet());
 
 // CORS — restrict in production, allow all in development
-const corsOptions = {};
-if (process.env.CORS_ORIGINS) {
-  corsOptions.origin = process.env.CORS_ORIGINS.split(',').map(o => o.trim());
-}
+const configuredOrigins = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const corsOptions = {
+  // Native Flutter clients normally do not send an Origin header. In production,
+  // browser origins must be explicitly configured through CORS_ORIGINS.
+  origin: configuredOrigins.length > 0 ? configuredOrigins : true,
+};
 app.use(cors(corsOptions));
 
 // Parse bodies with size limits

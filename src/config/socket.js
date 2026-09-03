@@ -9,8 +9,13 @@ let io;
  * Auth is handled via JWT in `socket.handshake.auth.token`.
  */
 function initSocket(httpServer) {
+  const configuredOrigins = (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
   io = new Server(httpServer, {
-    cors: { origin: '*' },
+    cors: { origin: configuredOrigins.length > 0 ? configuredOrigins : true },
     pingTimeout: 60000,
     pingInterval: 25000,
   });
@@ -44,14 +49,44 @@ function initSocket(httpServer) {
     socket.join(`user:${socket.userId}`);
 
     // ── Typing indicators ──────────────────────────────────────
-    socket.on('typing:start', ({ conversationId }) => {
+    const isConversationParticipant = async (conversationId) => {
+      if (!conversationId || typeof conversationId !== 'string') return false;
+      const participant = await prisma.conversationParticipant.findUnique({
+        where: {
+          conversationId_userId: {
+            conversationId,
+            userId: socket.userId,
+          },
+        },
+        select: { id: true },
+      });
+      return Boolean(participant);
+    };
+
+    const denyConversationEvent = (event, conversationId) => {
+      socket.emit('chat:error', {
+        event,
+        conversationId,
+        message: 'Not authorized for this conversation',
+      });
+    };
+
+    socket.on('typing:start', async ({ conversationId } = {}) => {
+      if (!(await isConversationParticipant(conversationId))) {
+        denyConversationEvent('typing:start', conversationId);
+        return;
+      }
       socket.to(`conv:${conversationId}`).emit('typing:start', {
         conversationId,
         userId: socket.userId,
       });
     });
 
-    socket.on('typing:stop', ({ conversationId }) => {
+    socket.on('typing:stop', async ({ conversationId } = {}) => {
+      if (!(await isConversationParticipant(conversationId))) {
+        denyConversationEvent('typing:stop', conversationId);
+        return;
+      }
       socket.to(`conv:${conversationId}`).emit('typing:stop', {
         conversationId,
         userId: socket.userId,
@@ -59,17 +94,43 @@ function initSocket(httpServer) {
     });
 
     // ── Room management ────────────────────────────────────────
-    socket.on('conversation:join', ({ conversationId }) => {
+    socket.on('conversation:join', async ({ conversationId } = {}) => {
+      if (!(await isConversationParticipant(conversationId))) {
+        denyConversationEvent('conversation:join', conversationId);
+        return;
+      }
       socket.join(`conv:${conversationId}`);
     });
 
-    socket.on('conversation:leave', ({ conversationId }) => {
+    socket.on('conversation:leave', async ({ conversationId } = {}) => {
+      if (!(await isConversationParticipant(conversationId))) {
+        denyConversationEvent('conversation:leave', conversationId);
+        return;
+      }
       socket.leave(`conv:${conversationId}`);
     });
 
     // ── Read receipts ──────────────────────────────────────────
-    socket.on('message:read', async ({ conversationId, messageId }) => {
+    socket.on('message:read', async ({ conversationId, messageId } = {}) => {
       try {
+        if (!(await isConversationParticipant(conversationId))) {
+          denyConversationEvent('message:read', conversationId);
+          return;
+        }
+
+        const message = await prisma.message.findFirst({
+          where: { id: messageId, conversationId, deletedForAll: false },
+          select: { id: true },
+        });
+        if (!message) {
+          socket.emit('chat:error', {
+            event: 'message:read',
+            conversationId,
+            message: 'Message not found in this conversation',
+          });
+          return;
+        }
+
         await prisma.conversationParticipant.updateMany({
           where: { conversationId, userId: socket.userId },
           data: { lastReadMessageId: messageId },

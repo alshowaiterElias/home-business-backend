@@ -30,6 +30,7 @@ model User {
   // Chat relations
   conversationParticipants ConversationParticipant[]
   messagesSent             Message[]    @relation("MessagesSent")
+  messageVisibility        MessageVisibility[]
   blocksGiven              UserBlock[]  @relation("BlocksGiven")
   blocksReceived           UserBlock[]  @relation("BlocksReceived")
 
@@ -332,11 +333,29 @@ model Message {
   replyTo         Message?     @relation("Replies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies         Message[]    @relation("Replies")
   reference       MessageReference?
+  visibility      MessageVisibility[]
   lastOfConversation Conversation? @relation("LastMessage")
 
   @@index([conversationId, createdAt])
   @@index([senderId])
   @@map("messages")
+}
+
+// Per-user message hiding. A sender can delete a message for everyone through
+// Message.deletedForAll; deleting it only for themselves must not change what
+// the other participant or conversation-intelligence pipeline can see.
+model MessageVisibility {
+  id        String   @id @default(uuid())
+  messageId String   @map("message_id")
+  userId    String   @map("user_id")
+  deletedAt DateTime @default(now()) @map("deleted_at")
+
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([userId])
+  @@map("message_visibility")
 }
 
 enum MessageType {

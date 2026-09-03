@@ -1,5 +1,7 @@
 const chatService = require('../services/chatService');
 
+const errorStatus = (error, fallback = 500) => error.statusCode || fallback;
+
 // ─── List Conversations ──────────────────────────────────────────
 const getConversations = async (req, res) => {
   try {
@@ -11,7 +13,7 @@ const getConversations = async (req, res) => {
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('Error getting conversations:', error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(errorStatus(error)).json({ success: false, message: error.message });
   }
 };
 
@@ -26,7 +28,7 @@ const getOrCreateConversation = async (req, res) => {
     res.json({ success: true, data: conversation });
   } catch (error) {
     console.error('Error creating conversation:', error);
-    const status = error.message.includes('Cannot') ? 403 : 500;
+    const status = errorStatus(error, error.message.includes('Cannot') ? 403 : 500);
     res.status(status).json({ success: false, message: error.message });
   }
 };
@@ -43,7 +45,7 @@ const getMessages = async (req, res) => {
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('Error getting messages:', error);
-    const status = error.message.includes('Not a participant') ? 403 : 500;
+    const status = errorStatus(error, error.message.includes('Not a participant') ? 403 : 500);
     res.status(status).json({ success: false, message: error.message });
   }
 };
@@ -68,7 +70,7 @@ const sendMessage = async (req, res) => {
     res.status(201).json({ success: true, data: message });
   } catch (error) {
     console.error('Error sending message:', error);
-    const status = error.message.includes('Cannot') || error.message.includes('Not a participant') ? 403 : 500;
+    const status = errorStatus(error, error.message.includes('Cannot') || error.message.includes('Not a participant') ? 403 : 500);
     res.status(status).json({ success: false, message: error.message });
   }
 };
@@ -84,7 +86,7 @@ const markAsRead = async (req, res) => {
     await chatService.markAsRead(id, req.user.id, messageId);
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(errorStatus(error)).json({ success: false, message: error.message });
   }
 };
 
@@ -96,7 +98,7 @@ const muteConversation = async (req, res) => {
     await chatService.updateConversationFlags(id, req.user.id, { isMuted: !!muted });
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(errorStatus(error)).json({ success: false, message: error.message });
   }
 };
 
@@ -108,7 +110,7 @@ const archiveConversation = async (req, res) => {
     await chatService.updateConversationFlags(id, req.user.id, { isArchived: !!archived });
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(errorStatus(error)).json({ success: false, message: error.message });
   }
 };
 
@@ -119,7 +121,7 @@ const deleteConversation = async (req, res) => {
     await chatService.updateConversationFlags(id, req.user.id, { isDeleted: true });
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(errorStatus(error)).json({ success: false, message: error.message });
   }
 };
 
@@ -132,7 +134,7 @@ const deleteMessageHandler = async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting message:', error);
-    const status = error.message.includes('Only the sender') ? 403 : 500;
+    const status = errorStatus(error, error.message.includes('Only the sender') ? 403 : 500);
     res.status(status).json({ success: false, message: error.message });
   }
 };
@@ -144,7 +146,7 @@ const blockUser = async (req, res) => {
     await chatService.blockUser(req.user.id, userId);
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(errorStatus(error)).json({ success: false, message: error.message });
   }
 };
 
@@ -155,7 +157,7 @@ const unblockUser = async (req, res) => {
     await chatService.unblockUser(req.user.id, userId);
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(errorStatus(error)).json({ success: false, message: error.message });
   }
 };
 
@@ -165,7 +167,7 @@ const getUnreadCount = async (req, res) => {
     const count = await chatService.getUnreadCount(req.user.id);
     res.json({ success: true, data: { unreadCount: count } });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(errorStatus(error)).json({ success: false, message: error.message });
   }
 };
 

@@ -17,7 +17,6 @@ RUN npx prisma generate
 
 # Copy the rest of the application code
 COPY src ./src/
-COPY .env ./
 
 # Ensure uploads directories exist
 RUN mkdir -p uploads/products uploads/businesses uploads/categories

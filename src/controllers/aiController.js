@@ -1,5 +1,7 @@
 const prisma = require('../config/db');
 const aiService = require('../services/aiService');
+const { resolveAiContext } = require('../ai/context/resolveAiContext');
+const { runMarketplaceAssistant } = require('../ai/aiOrchestrator');
 
 /**
  * Generate AI Marketing Ad for a specific product
@@ -47,6 +49,40 @@ const generateProductAd = async (req, res, next) => {
   }
 };
 
+const askAssistant = async (req, res, next) => {
+  try {
+    if (process.env.AI_ENABLED !== 'true') {
+      return res.status(503).json({ success: false, message: 'المساعد غير متاح مؤقتاً' });
+    }
+
+    const { message, context, clientRequestId } = req.body;
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ success: false, message: 'Message is required' });
+    }
+
+    // 1. Resolve & Secure Context
+    const resolvedContext = await resolveAiContext(req.user.id, context);
+
+    // 2. Run Orchestrator
+    const result = await runMarketplaceAssistant(resolvedContext, message);
+
+    res.json({
+      success: true,
+      data: {
+        ...result,
+        clientRequestId // Echo back if provided
+      }
+    });
+  } catch (error) {
+    // If it's a known validation error from resolveAiContext, return 422
+    if (error.message.includes('not currently available') || error.message.includes('Invalid screen')) {
+      return res.status(422).json({ success: false, message: error.message });
+    }
+    next(error);
+  }
+};
+
 module.exports = {
-  generateProductAd
+  generateProductAd,
+  askAssistant
 };
