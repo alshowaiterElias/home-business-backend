@@ -32,7 +32,7 @@ class GeminiProvider extends AiProvider {
         parts = parts.concat(msg.toolResponses.map(resp => ({
           functionResponse: {
             name: resp.name,
-            response: resp.response
+            response: { result: resp.response }
           }
         })));
       }
