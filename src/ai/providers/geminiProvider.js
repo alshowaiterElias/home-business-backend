@@ -6,8 +6,8 @@ class GeminiProvider extends AiProvider {
     super();
     // Use the official SDK, which picks up GEMINI_API_KEY automatically from env if not provided
     this.ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    this.chatModel = process.env.AI_CHAT_MODEL || 'gemini-2.5-flash';
-    this.structuredModel = process.env.AI_STRUCTURED_MODEL || 'gemini-2.5-flash';
+    this.chatModel = process.env.AI_CHAT_MODEL || 'gemini-3.6-flash';
+    this.structuredModel = process.env.AI_STRUCTURED_MODEL || 'gemini-3.6-flash';
     this.embeddingModel = process.env.AI_EMBEDDING_MODEL || 'text-embedding-004';
   }
 
