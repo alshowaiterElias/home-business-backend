@@ -51,20 +51,28 @@ const generateProductAd = async (req, res, next) => {
 
 const askAssistant = async (req, res, next) => {
   try {
+    console.log(`[AI Controller] Received request from user ${req.user.id}. Message length: ${req.body?.message?.length}`);
     if (process.env.AI_ENABLED !== 'true') {
+      console.log(`[AI Controller] AI is disabled in environment.`);
       return res.status(503).json({ success: false, message: 'المساعد غير متاح مؤقتاً' });
     }
 
     const { message, context, clientRequestId } = req.body;
+    console.log(`[AI Controller] ClientRequestId: ${clientRequestId}, Context: ${JSON.stringify(context)}`);
+    
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ success: false, message: 'Message is required' });
     }
 
     // 1. Resolve & Secure Context
+    console.log(`[AI Controller] Resolving AI context...`);
     const resolvedContext = await resolveAiContext(req.user.id, context);
+    console.log(`[AI Controller] Context resolved successfully.`);
 
     // 2. Run Orchestrator
+    console.log(`[AI Controller] Starting AI Orchestrator...`);
     const result = await runMarketplaceAssistant(resolvedContext, message);
+    console.log(`[AI Controller] Orchestrator finished successfully.`);
 
     res.json({
       success: true,

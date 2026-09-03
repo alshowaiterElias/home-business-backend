@@ -79,7 +79,9 @@ const runMarketplaceAssistant = async (resolvedContext, userMessage) => {
   while (rounds < maxRounds) {
     rounds++;
 
+    console.log(`[AI Orchestrator] Starting round ${rounds}/${maxRounds}`);
     // Ask Gemini
+    console.log(`[AI Orchestrator] Generating content with Gemini...`);
     const response = await geminiProvider.generate({
       messages,
       tools: toolDeclarations,
@@ -90,17 +92,21 @@ const runMarketplaceAssistant = async (resolvedContext, userMessage) => {
     totalOutputTokens += response.usage.outputTokens;
 
     if (response.toolCalls.length === 0) {
+      console.log(`[AI Orchestrator] Model chose not to use any more tools. Proceeding to structured output.`);
       // The model is done using tools, now we force structured output
       break;
     }
 
+    console.log(`[AI Orchestrator] Model requested ${response.toolCalls.length} tool calls.`);
     // Process tool calls
     messages.push({ role: 'model', toolCalls: response.toolCalls });
 
     const toolResponses = [];
     for (const call of response.toolCalls) {
+      console.log(`[AI Orchestrator] Executing tool: ${call.name} with args:`, call.args);
       try {
         const result = await executeTool(call.name, call.args);
+        console.log(`[AI Orchestrator] Tool ${call.name} execution successful. Returning result to AI.`);
         toolResponses.push({ name: call.name, response: result });
 
         // Collect verified IDs for grounding
