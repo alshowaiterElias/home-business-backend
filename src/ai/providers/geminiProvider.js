@@ -76,7 +76,10 @@ class GeminiProvider extends AiProvider {
       };
     } catch (error) {
       console.error('[GeminiProvider] Generate error:', error);
-      throw new Error('AI provider generation failed');
+      if (error.status === 429) {
+        throw new Error('عذرًا، المساعد الذكي غير متاح حالياً بسبب تجاوز حد الاستخدام (نفاد الرصيد).');
+      }
+      throw new Error('تعذر معالجة طلبك بواسطة المساعد الذكي. يرجى المحاولة لاحقاً.');
     }
   }
 
@@ -113,7 +116,10 @@ class GeminiProvider extends AiProvider {
       };
     } catch (error) {
       console.error('[GeminiProvider] Structured generate error:', error);
-      throw new Error('AI provider structured generation failed');
+      if (error.status === 429) {
+        throw new Error('عذرًا، المساعد الذكي غير متاح حالياً بسبب تجاوز حد الاستخدام (نفاد الرصيد).');
+      }
+      throw new Error('تعذر معالجة طلبك بواسطة المساعد الذكي. يرجى المحاولة لاحقاً.');
     }
   }
 
